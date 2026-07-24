@@ -7,7 +7,7 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
-SELLER_ID = 8187401606  # Smir
+SELLER_ID = 8187401606  # Smir (модер)
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -17,7 +17,7 @@ dp = Dispatcher()
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text='Мaгaзин'), KeyboardButton(text='Кopзинa')],
-        [KeyboardButton(text='Чaт c пpoдaвцoм'), KeyboardButton(text='Moи зaкaзы')],
+        [KeyboardButton(text='Чaт c мoдepoм'), KeyboardButton(text='Moи зaкaзы')],
         [KeyboardButton(text='Koнтaкты')]
     ],
     resize_keyboard=True
@@ -98,7 +98,6 @@ def get_cart_kb(user_id):
     return kb
 
 def get_cart_item_kb(key):
-    """Кнопки + и - для товара в корзине"""
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="-", callback_data=f"dec_{key}"),
@@ -110,13 +109,12 @@ def get_cart_item_kb(key):
 
 def get_seller_choice_kb():
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Smir", callback_data="seller_smir")],
+        [InlineKeyboardButton(text="Smir (модер)", callback_data="seller_smir")],
         [InlineKeyboardButton(text="Назад", callback_data="back_main")]
     ])
     return kb
 
 def get_cart_item_text(key: str, user_id: int) -> str:
-    """Формирует текст для карточки товара в корзине"""
     cart = user_carts.get(user_id, {})
     if key not in cart:
         return None
@@ -183,11 +181,11 @@ async def view_cart(message: types.Message):
     
     await message.answer(text, reply_markup=get_cart_kb(user_id))
 
-@dp.message(lambda msg: msg.text == 'Чaт c пpoдaвцoм')
+@dp.message(lambda msg: msg.text == 'Чaт c мoдepoм')
 async def chat_with_seller(message: types.Message):
     user_id = message.from_user.id
     await message.answer(
-        "<b>Выберите продавца:</b>",
+        "<b>Выберите модера:</b>",
         reply_markup=get_seller_choice_kb()
     )
 
@@ -266,7 +264,7 @@ async def handle_user_message(message: types.Message):
             try:
                 reply_kb = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(
-                        text="Ответить",
+                        text="Ответить (модеру)",
                         callback_data=f"reply_{user_id}"
                     )]
                 ])
@@ -277,8 +275,8 @@ async def handle_user_message(message: types.Message):
                 )
                 await message.answer(
                     "<b>Заказ успешно отправлен.</b>\n"
-                    "Ожидайте подтверждения в чате с продавцом.\n"
-                    "Для связи используйте 'Чат с продавцом'."
+                    "Ожидайте подтверждения в чате с модером.\n"
+                    "Для связи используйте 'Чат c мoдepoм'."
                 )
                 if user_id not in user_orders:
                     user_orders[user_id] = []
@@ -289,12 +287,12 @@ async def handle_user_message(message: types.Message):
                 await message.answer("<i>Ошибка отправки заказа. Попробуйте позже.</i>")
             return
     
-    # ЧАТ С ПРОДАВЦОМ
+    # ЧАТ С МОДЕРОМ
     if user_id in user_sessions and user_sessions[user_id] == 'chat_mode':
         try:
             reply_kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
-                    text="Ответить",
+                    text="Ответить (модеру)",
                     callback_data=f"reply_{user_id}"
                 )]
             ])
@@ -303,17 +301,17 @@ async def handle_user_message(message: types.Message):
                 f"<b>Сообщение от покупателя</b> (ID: {user_id}, Юзepнeйм: @{message.from_user.username if message.from_user.username else 'Нет'}):\n{text}",
                 reply_markup=reply_kb
             )
-            await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
+            await message.answer("<b>Сообщение отправлено модеру.</b> Ожидайте ответа.")
         except Exception as e:
-            await message.answer("<i>Ошибка отправки. Продавец недоступен.</i>")
+            await message.answer("<i>Ошибка отправки. Модер недоступен.</i>")
         return
     
     await message.answer(
         "<i>Используйте кнопки меню для навигации.\n"
-        "Для связи с продавцом нажмите 'Чат c пpoдaвцoм'.</i>"
+        "Для связи с модером нажмите 'Чат c мoдepoм'.</i>"
     )
 
-# ========== ОБРАБОТКА СООБЩЕНИЙ ОТ ПРОДАВЦА ==========
+# ========== ОБРАБОТКА СООБЩЕНИЙ ОТ МОДЕРА ==========
 @dp.message(lambda msg: msg.from_user.id == SELLER_ID and msg.text and not msg.text.startswith('/'))
 async def handle_seller_reply(message: types.Message):
     user_id = message.from_user.id
@@ -324,7 +322,7 @@ async def handle_seller_reply(message: types.Message):
         try:
             await bot.send_message(
                 buyer_id,
-                f"<b>Ответ продавца:</b>\n{text}"
+                f"<b>Ответ модера:</b>\n{text}"
             )
             await message.answer(
                 f"<b>Ответ отправлен покупателю (ID: {buyer_id}).</b>"
@@ -338,7 +336,7 @@ async def handle_seller_reply(message: types.Message):
             )
     else:
         await message.answer(
-            "<i>Вы не в режиме ответа. Используйте кнопку 'Ответить' под сообщением покупателя.</i>"
+            "<i>Вы не в режиме ответа. Используйте кнопку 'Ответить (модеру)' под сообщением покупателя.</i>"
         )
 
 @dp.message(Command('exit_chat'))
@@ -346,7 +344,7 @@ async def exit_chat(message: types.Message):
     user_id = message.from_user.id
     if user_id in user_sessions:
         del user_sessions[user_id]
-        await message.answer("<b>Вы вышли из чата с продавцом.</b>", reply_markup=main_kb)
+        await message.answer("<b>Вы вышли из чата с модером.</b>", reply_markup=main_kb)
     else:
         await message.answer("<i>Вы не находитесь в чате.</i>")
 
@@ -425,7 +423,6 @@ async def add_to_cart(callback: types.CallbackQuery):
     else:
         user_carts[user_id][key] = {'price': data['price'], 'qty': 1}
     
-    # Редактируем сообщение с карточкой товара
     text = get_cart_item_text(key, user_id)
     if text:
         await callback.message.edit_text(
@@ -436,7 +433,7 @@ async def add_to_cart(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data.startswith('inc_') or cb.data.startswith('dec_'))
 async def change_cart_quantity(callback: types.CallbackQuery):
-    action = callback.data[:3]  # inc или dec
+    action = callback.data[:3]
     key = callback.data[4:]
     user_id = callback.from_user.id
     
@@ -451,7 +448,6 @@ async def change_cart_quantity(callback: types.CallbackQuery):
         if cart[key]['qty'] > 1:
             cart[key]['qty'] -= 1
         else:
-            # Удаляем товар
             del cart[key]
             await callback.message.edit_text(
                 "<b>Товар удалён из корзины.</b>\n"
@@ -463,7 +459,6 @@ async def change_cart_quantity(callback: types.CallbackQuery):
             await callback.answer()
             return
     
-    # Обновляем сообщение
     text = get_cart_item_text(key, user_id)
     if text:
         await callback.message.edit_text(
@@ -475,14 +470,10 @@ async def change_cart_quantity(callback: types.CallbackQuery):
 @dp.callback_query(lambda cb: cb.data == 'back_to_cart')
 async def back_to_cart_callback(callback: types.CallbackQuery):
     user_id = callback.from_user.id
-    await callback.message.edit_text(
-        "<b>Возврат в корзину...</b>"
-    )
-    # Отправляем новое сообщение с корзиной
+    await callback.message.edit_text("<b>Возврат в корзину...</b>")
     await view_cart(callback.message)
     await callback.answer()
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 async def view_cart(message: types.Message):
     user_id = message.from_user.id if hasattr(message, 'from_user') else message.chat.id
     cart = user_carts.get(user_id, {})
@@ -564,7 +555,7 @@ async def back_main(callback: types.CallbackQuery):
     await callback.message.answer("<b>Возврат в главное меню.</b>", reply_markup=main_kb)
     await callback.answer()
 
-# ========== КОЛБЭКИ ДЛЯ ЧАТА С ПРОДАВЦОМ ==========
+# ========== КОЛБЭКИ ДЛЯ ЧАТА С МОДЕРОМ ==========
 @dp.callback_query(lambda cb: cb.data.startswith('seller_'))
 async def select_seller(callback: types.CallbackQuery):
     seller = callback.data.replace('seller_', '')
@@ -573,8 +564,8 @@ async def select_seller(callback: types.CallbackQuery):
     if seller == 'smir':
         user_sessions[user_id] = 'chat_mode'
         await callback.message.answer(
-            "<b>Вы подключены к Smir.</b>\n"
-            "<i>Напишите сообщение. Оно будет отправлено продавцу.</i>\n"
+            "<b>Вы подключены к модеру Smir.</b>\n"
+            "<i>Напишите сообщение. Оно будет отправлено модеру.</i>\n"
             "Для выхода напишите /exit_chat"
         )
     await callback.answer()
@@ -585,7 +576,7 @@ async def reply_to_buyer(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     
     if user_id != SELLER_ID:
-        await callback.answer("Вы не продавец.")
+        await callback.answer("Вы не модер.")
         return
     
     user_sessions[user_id] = f'reply_mode_{buyer_id}'
