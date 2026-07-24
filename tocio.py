@@ -43,12 +43,12 @@ weapons = {
     'Гpaнaтa Ф-1': {'price': 12500, 'stock': 120, 'category': 'Оружие'},
 
     # ===== НОВАЯ КАТЕГОРИЯ: ДОКУМЕНТЫ =====
-    'Цифровой скан': {'price': 1500, 'stock': ∞, 'category': 'Документы'},
-    'Данные личности': {'price': 7000, 'stock': ∞, 'category': 'Документы'},
-    'Права (пластик)': {'price': 52800, 'stock': ∞, 'category': 'Документы'},
-    'Паспорт РФ': {'price': 178000, 'stock': ∞, 'category': 'Документы'},
-    'Зарубежка (без чипа)': {'price': 350000, 'stock': ∞, 'category': 'Документы'},
-    'Зарубежка (с чипом)': {'price': 950000, 'stock': ∞, 'category': 'Документы'},
+    'Цифровой скан': {'price': 1500, 'stock': unlimited, 'category': 'Документы'},
+    'Данные личности': {'price': 7000, 'stock': unlimited, 'category': 'Документы'},
+    'Права (пластик)': {'price': 52800, 'stock': unlimited, 'category': 'Документы'},
+    'Паспорт РФ': {'price': 178000, 'stock': unlimited, 'category': 'Документы'},
+    'Зарубежка (без чипа)': {'price': 350000, 'stock': unlimited, 'category': 'Документы'},
+    'Зарубежка (с чипом)': {'price': 950000, 'stock': unlimited, 'category': 'Документы'},
 }
 
 user_sessions = {}
