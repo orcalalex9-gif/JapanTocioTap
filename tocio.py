@@ -50,11 +50,10 @@ weapons = {
 }
 
 # ========== БАЗЫ ДАННЫХ ==========
-user_sessions = {}  # chat_mode / reply_mode_{buyer_id}
+user_sessions = {}
 user_orders = {}
 user_carts = {}
 user_forms = {}
-user_selected_seller = {}  # запоминаем, кого выбрал клиент
 
 # ========== КЛАВИАТУРЫ ==========
 def get_shop_kb():
@@ -116,6 +115,27 @@ def get_seller_choice_kb():
     ])
     return kb
 
+def get_cart_item_text(key: str, user_id: int) -> str:
+    """Формирует текст для карточки товара в корзине"""
+    cart = user_carts.get(user_id, {})
+    if key not in cart:
+        return None
+    
+    data = cart[key]
+    name = weapons[key]['name']
+    price = data['price']
+    qty = data['qty']
+    subtotal = price * qty
+    
+    return (
+        f"<b>Корзина — {name}</b>\n"
+        f"Цена: {price:,} руб.\n"
+        f"Количество: {qty}\n"
+        f"Сумма: {subtotal:,} руб.\n"
+        f"——————————\n"
+        f"<i>Используйте кнопки + и - для изменения количества.</i>"
+    )
+
 # ========== ОБРАБОТЧИКИ СООБЩЕНИЙ ==========
 @dp.message(Command('start'))
 async def start(message: types.Message):
@@ -158,7 +178,6 @@ async def view_cart(message: types.Message):
         total += subtotal
         text += f"{i}. {name}\n"
         text += f"   Цена: {price:,} руб. x {qty} = {subtotal:,} руб.\n"
-        text += f"   [ - ] [ + ]\n"  # подсказка для пользователя
     text += "——————————\n"
     text += f"<b>Итого: {total:,} руб.</b>"
     
@@ -270,7 +289,7 @@ async def handle_user_message(message: types.Message):
                 await message.answer("<i>Ошибка отправки заказа. Попробуйте позже.</i>")
             return
     
-    # ЧАТ С ПРОДАВЦОМ (если клиент выбрал продавца)
+    # ЧАТ С ПРОДАВЦОМ
     if user_id in user_sessions and user_sessions[user_id] == 'chat_mode':
         try:
             reply_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -289,7 +308,6 @@ async def handle_user_message(message: types.Message):
             await message.answer("<i>Ошибка отправки. Продавец недоступен.</i>")
         return
     
-    # Если клиент не в режиме чата — игнорируем (или можно дать подсказку)
     await message.answer(
         "<i>Используйте кнопки меню для навигации.\n"
         "Для связи с продавцом нажмите 'Чат c пpoдaвцoм'.</i>"
@@ -407,32 +425,14 @@ async def add_to_cart(callback: types.CallbackQuery):
     else:
         user_carts[user_id][key] = {'price': data['price'], 'qty': 1}
     
-    # Показываем обновлённую корзину с кнопками + и -
-    await show_cart_item(callback.message, user_id, key)
+    # Редактируем сообщение с карточкой товара
+    text = get_cart_item_text(key, user_id)
+    if text:
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_cart_item_kb(key)
+        )
     await callback.answer()
-
-async def show_cart_item(message: types.Message, user_id: int, key: str):
-    """Показывает товар в корзине с кнопками + и -"""
-    cart = user_carts.get(user_id, {})
-    if key not in cart:
-        await message.answer("<b>Товар удалён из корзины.</b>")
-        return
-    
-    data = cart[key]
-    name = weapons[key]['name']
-    price = data['price']
-    qty = data['qty']
-    subtotal = price * qty
-    
-    await message.answer(
-        f"<b>Корзина — {name}</b>\n"
-        f"Цена: {price:,} руб.\n"
-        f"Количество: {qty}\n"
-        f"Сумма: {subtotal:,} руб.\n"
-        f"——————————\n"
-        f"<i>Используйте кнопки + и - для изменения количества.</i>",
-        reply_markup=get_cart_item_kb(key)
-    )
 
 @dp.callback_query(lambda cb: cb.data.startswith('inc_') or cb.data.startswith('dec_'))
 async def change_cart_quantity(callback: types.CallbackQuery):
@@ -451,25 +451,40 @@ async def change_cart_quantity(callback: types.CallbackQuery):
         if cart[key]['qty'] > 1:
             cart[key]['qty'] -= 1
         else:
-            # Если количество 0 или меньше — удаляем товар
+            # Удаляем товар
             del cart[key]
-            await callback.message.answer("<b>Товар удалён из корзины.</b>")
+            await callback.message.edit_text(
+                "<b>Товар удалён из корзины.</b>\n"
+                "<i>Вы можете вернуться в корзину или продолжить покупки.</i>",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="Назад в корзину", callback_data="back_to_cart")]
+                ])
+            )
             await callback.answer()
             return
     
-    # Обновляем отображение
-    await show_cart_item(callback.message, user_id, key)
+    # Обновляем сообщение
+    text = get_cart_item_text(key, user_id)
+    if text:
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_cart_item_kb(key)
+        )
     await callback.answer()
 
 @dp.callback_query(lambda cb: cb.data == 'back_to_cart')
-async def back_to_cart(callback: types.CallbackQuery):
+async def back_to_cart_callback(callback: types.CallbackQuery):
     user_id = callback.from_user.id
+    await callback.message.edit_text(
+        "<b>Возврат в корзину...</b>"
+    )
+    # Отправляем новое сообщение с корзиной
     await view_cart(callback.message)
     await callback.answer()
 
-# Чтобы не дублировать, переиспользуем view_cart для сообщений
+# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 async def view_cart(message: types.Message):
-    user_id = message.from_user.id
+    user_id = message.from_user.id if hasattr(message, 'from_user') else message.chat.id
     cart = user_carts.get(user_id, {})
     
     if not cart:
@@ -490,7 +505,6 @@ async def view_cart(message: types.Message):
         total += subtotal
         text += f"{i}. {name}\n"
         text += f"   Цена: {price:,} руб. x {qty} = {subtotal:,} руб.\n"
-        text += f"   [ - ] [ + ]\n"
     text += "——————————\n"
     text += f"<b>Итого: {total:,} руб.</b>"
     
