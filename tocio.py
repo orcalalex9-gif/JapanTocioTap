@@ -7,7 +7,7 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
-SELLER_ID = 8187401606
+SELLER_ID = 8187401606  # Smir
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -49,11 +49,9 @@ weapons = {
     'foreign_passport_chip': {'name': 'Зарубежка (с чипом)', 'price': 950000, 'stock': None, 'category': 'Документы'},
 }
 
-# ========== БАЗЫ ДАННЫХ ==========
 user_sessions = {}
 user_orders = {}
 user_carts = {}
-# Храним состояние анкеты для каждого пользователя
 user_forms = {}
 
 # ========== КЛАВИАТУРЫ ==========
@@ -95,6 +93,15 @@ def get_cart_kb(user_id):
         ])
     kb.inline_keyboard.append([
         InlineKeyboardButton(text="Назад в магазин", callback_data="back_categories")
+    ])
+    return kb
+
+# ========== ЧАТ С ПРОДАВЦОМ ==========
+def get_seller_choice_kb():
+    """Клавиатура выбора продавца"""
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Smir", callback_data="seller_smir")],
+        [InlineKeyboardButton(text="Назад", callback_data="back_main")]
     ])
     return kb
 
@@ -150,9 +157,8 @@ async def chat_with_seller(message: types.Message):
     user_id = message.from_user.id
     user_sessions[user_id] = 'chat_mode'
     await message.answer(
-        "<b>Вы в чате с продавцом.</b>\n"
-        "<i>Напишите сообщение или вставьте готовый текст заказа.</i>\n"
-        "Для выхода напишите /exit_chat"
+        "<b>Выберите продавца:</b>",
+        reply_markup=get_seller_choice_kb()
     )
 
 @dp.message(lambda msg: msg.text == 'Moи зaкaзы')
@@ -187,10 +193,9 @@ async def handle_user_message(message: types.Message):
     user_id = message.from_user.id
     text = message.text.strip()
     
-    # Если пользователь в режиме заполнения анкеты
+    # Анкета
     if user_id in user_forms:
         form_data = user_forms[user_id]
-        # Проверяем, какой шаг анкеты
         if 'region' not in form_data:
             form_data['region'] = text
             await message.answer(
@@ -214,8 +219,6 @@ async def handle_user_message(message: types.Message):
             return
         elif 'payment' not in form_data:
             form_data['payment'] = text
-            
-            # Анкета заполнена — отправляем продавцу
             username = message.from_user.username if message.from_user.username else "Нет"
             order_text = (
                 f"<b>Новый заказ (анкета):</b>\n"
@@ -230,30 +233,45 @@ async def handle_user_message(message: types.Message):
             )
             
             try:
-                await bot.send_message(SELLER_ID, order_text)
+                # Отправляем продавцу с кнопкой ответа
+                reply_kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text="Ответить",
+                        callback_data=f"reply_{user_id}"
+                    )]
+                ])
+                await bot.send_message(
+                    SELLER_ID,
+                    order_text,
+                    reply_markup=reply_kb
+                )
                 await message.answer(
                     "<b>Заказ успешно отправлен.</b>\n"
                     "Ожидайте подтверждения в чате с продавцом.\n"
                     "Для связи используйте 'Чат с продавцом'."
                 )
-                # Сохраняем в историю
                 if user_id not in user_orders:
                     user_orders[user_id] = []
                 user_orders[user_id].append(f"Анкета — {form_data['items']}")
-                # Очищаем корзину
                 user_carts[user_id] = {}
-                # Удаляем состояние анкеты
                 del user_forms[user_id]
             except Exception as e:
                 await message.answer("<i>Ошибка отправки заказа. Попробуйте позже.</i>")
             return
     
-    # Обычный режим чата с продавцом
+    # Чат с продавцом
     if user_id in user_sessions and user_sessions[user_id] == 'chat_mode':
         try:
+            reply_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="Ответить",
+                    callback_data=f"reply_{user_id}"
+                )]
+            ])
             await bot.send_message(
                 SELLER_ID,
-                f"<b>Сообщение от покупателя</b> (ID: {user_id}, Юзepнeйм: @{message.from_user.username if message.from_user.username else 'Нет'}):\n{text}"
+                f"<b>Сообщение от покупателя</b> (ID: {user_id}, Юзepнeйм: @{message.from_user.username if message.from_user.username else 'Нет'}):\n{text}",
+                reply_markup=reply_kb
             )
             await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
         except Exception as e:
@@ -359,7 +377,6 @@ async def checkout(callback: types.CallbackQuery):
         await callback.answer()
         return
     
-    # Формируем список товаров для анкеты
     items_list = []
     for key, data in cart.items():
         name = weapons[key]['name']
@@ -368,7 +385,6 @@ async def checkout(callback: types.CallbackQuery):
     
     items_text = ", ".join(items_list)
     
-    # Сохраняем состояние анкеты
     user_forms[user_id] = {
         'items': items_text,
         'cart': cart.copy()
@@ -404,6 +420,66 @@ async def back_shop(callback: types.CallbackQuery):
 async def back_main(callback: types.CallbackQuery):
     await callback.message.answer("<b>Возврат в главное меню.</b>", reply_markup=main_kb)
     await callback.answer()
+
+# ========== КОЛБЭКИ ДЛЯ ЧАТА С ПРОДАВЦОМ ==========
+@dp.callback_query(lambda cb: cb.data.startswith('seller_'))
+async def select_seller(callback: types.CallbackQuery):
+    seller = callback.data.replace('seller_', '')
+    user_id = callback.from_user.id
+    
+    if seller == 'smir':
+        # Сохраняем, что пользователь выбрал Smir
+        user_sessions[user_id] = 'chat_mode_smir'
+        await callback.message.answer(
+            "<b>Вы подключены к Smir.</b>\n"
+            "<i>Напишите сообщение. Оно будет отправлено продавцу.</i>\n"
+            "Для выхода напишите /exit_chat"
+        )
+    await callback.answer()
+
+@dp.callback_query(lambda cb: cb.data.startswith('reply_'))
+async def reply_to_buyer(callback: types.CallbackQuery):
+    buyer_id = int(callback.data.replace('reply_', ''))
+    
+    # Сохраняем состояние, что продавец отвечает этому покупателю
+    user_sessions[SELLER_ID] = f'reply_mode_{buyer_id}'
+    
+    await callback.message.answer(
+        f"<b>Ответ покупателю (ID: {buyer_id})</b>\n"
+        "<i>Напишите текст ответа:</i>"
+    )
+    await callback.answer()
+
+# ========== ОБРАБОТЧИК ОТВЕТОВ ОТ ПРОДАВЦА ==========
+@dp.message(lambda msg: msg.from_user.id == SELLER_ID and msg.text and not msg.text.startswith('/'))
+async def handle_seller_reply(message: types.Message):
+    user_id = message.from_user.id
+    text = message.text.strip()
+    
+    # Проверяем, находится ли продавец в режиме ответа
+    if user_id in user_sessions and user_sessions[user_id].startswith('reply_mode_'):
+        buyer_id = int(user_sessions[user_id].replace('reply_mode_', ''))
+        try:
+            await bot.send_message(
+                buyer_id,
+                f"<b>Ответ продавца:</b>\n{text}"
+            )
+            await message.answer(
+                f"<b>Ответ отправлен покупателю (ID: {buyer_id}).</b>"
+            )
+            # Выходим из режима ответа
+            del user_sessions[user_id]
+        except Exception as e:
+            await message.answer(
+                f"<i>Ошибка отправки. Возможно, у покупателя спам-блок.</i>\n"
+                f"Его ID: {buyer_id}\n"
+                f"Текст для ручной отправки: {text}"
+            )
+    else:
+        # Если продавец просто пишет, но не в режиме ответа
+        await message.answer(
+            "<i>Вы не в режиме ответа. Используйте кнопку 'Ответить' под сообщением покупателя.</i>"
+        )
 
 # ========== ЗАПУСК ==========
 async def main():
