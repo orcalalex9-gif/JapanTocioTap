@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# ========== ГЛАВНОЕ МЕНЮ (БЕЗ ЭМОДЗИ) ==========
+# ========== ГЛАВНОЕ МЕНЮ ==========
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text='Мaгaзин'), KeyboardButton(text='Кopзинa')],
@@ -23,9 +23,8 @@ main_kb = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# ========== ТОВАРЫ (УНИКАЛЬНЫЕ КЛЮЧИ БЕЗ ПРОБЛЕМ) ==========
+# ========== ТОВАРЫ ==========
 weapons = {
-    # ОРУЖИЕ
     'barret_m83': {'name': 'Barret M83', 'price': 3500000, 'stock': 1, 'category': 'Оружие'},
     'm4a1': {'name': 'M4A1', 'price': 1500000, 'stock': 12, 'category': 'Оружие'},
     'svd': {'name': 'CВД', 'price': 1500000, 'stock': 3, 'category': 'Оружие'},
@@ -42,8 +41,6 @@ weapons = {
     'obrez': {'name': 'Обpeз', 'price': 80000, 'stock': 25, 'category': 'Оружие'},
     'silencer': {'name': 'Глyшитeль 9x19', 'price': 80000, 'stock': 30, 'category': 'Оружие'},
     'grenade': {'name': 'Гpaнaтa Ф-1', 'price': 12500, 'stock': 120, 'category': 'Оружие'},
-
-    # ДОКУМЕНТЫ
     'digital_scan': {'name': 'Цифровой скан', 'price': 1500, 'stock': None, 'category': 'Документы'},
     'personal_data': {'name': 'Данные личности', 'price': 7000, 'stock': None, 'category': 'Документы'},
     'drivers_license': {'name': 'Права (пластик)', 'price': 52800, 'stock': None, 'category': 'Документы'},
@@ -52,10 +49,12 @@ weapons = {
     'foreign_passport_chip': {'name': 'Зарубежка (с чипом)', 'price': 950000, 'stock': None, 'category': 'Документы'},
 }
 
-# ========== БАЗЫ ДАННЫХ (ВРЕМЕННЫЕ) ==========
+# ========== БАЗЫ ДАННЫХ ==========
 user_sessions = {}
 user_orders = {}
 user_carts = {}
+# Храним состояние анкеты для каждого пользователя
+user_forms = {}
 
 # ========== КЛАВИАТУРЫ ==========
 def get_shop_kb():
@@ -186,11 +185,75 @@ async def contacts(message: types.Message):
 @dp.message(lambda msg: msg.text and not msg.text.startswith('/'))
 async def handle_user_message(message: types.Message):
     user_id = message.from_user.id
+    text = message.text.strip()
+    
+    # Если пользователь в режиме заполнения анкеты
+    if user_id in user_forms:
+        form_data = user_forms[user_id]
+        # Проверяем, какой шаг анкеты
+        if 'region' not in form_data:
+            form_data['region'] = text
+            await message.answer(
+                "<b>Укажите тип тайника:</b>\n"
+                "<i>Магнит / Тайник в лесу / Прикоп</i>"
+            )
+            return
+        elif 'hideout' not in form_data:
+            form_data['hideout'] = text
+            await message.answer(
+                "<b>Укажите удобное время для забора:</b>\n"
+                "<i>День / Ночь / Не имеет значения</i>"
+            )
+            return
+        elif 'time' not in form_data:
+            form_data['time'] = text
+            await message.answer(
+                "<b>Укажите способ оплаты:</b>\n"
+                "<i>Крипта / Перевод на карту</i>"
+            )
+            return
+        elif 'payment' not in form_data:
+            form_data['payment'] = text
+            
+            # Анкета заполнена — отправляем продавцу
+            username = message.from_user.username if message.from_user.username else "Нет"
+            order_text = (
+                f"<b>Новый заказ (анкета):</b>\n"
+                f"——————————\n"
+                f"Товар: {form_data['items']}\n"
+                f"Регион / Район: {form_data['region']}\n"
+                f"Тип тайника: {form_data['hideout']}\n"
+                f"Время забора: {form_data['time']}\n"
+                f"Способ оплаты: {form_data['payment']}\n"
+                f"——————————\n"
+                f"Покупатель: {user_id} (@{username})"
+            )
+            
+            try:
+                await bot.send_message(SELLER_ID, order_text)
+                await message.answer(
+                    "<b>Заказ успешно отправлен.</b>\n"
+                    "Ожидайте подтверждения в чате с продавцом.\n"
+                    "Для связи используйте 'Чат с продавцом'."
+                )
+                # Сохраняем в историю
+                if user_id not in user_orders:
+                    user_orders[user_id] = []
+                user_orders[user_id].append(f"Анкета — {form_data['items']}")
+                # Очищаем корзину
+                user_carts[user_id] = {}
+                # Удаляем состояние анкеты
+                del user_forms[user_id]
+            except Exception as e:
+                await message.answer("<i>Ошибка отправки заказа. Попробуйте позже.</i>")
+            return
+    
+    # Обычный режим чата с продавцом
     if user_id in user_sessions and user_sessions[user_id] == 'chat_mode':
         try:
             await bot.send_message(
                 SELLER_ID,
-                f"<b>Сообщение от покупателя</b> (ID: {user_id}, Юзepнeйм: @{message.from_user.username if message.from_user.username else 'Нет'}):\n{message.text}"
+                f"<b>Сообщение от покупателя</b> (ID: {user_id}, Юзepнeйм: @{message.from_user.username if message.from_user.username else 'Нет'}):\n{text}"
             )
             await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
         except Exception as e:
@@ -225,7 +288,6 @@ async def back_categories(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data.startswith('buy_'))
 async def buy_weapon(callback: types.CallbackQuery):
-    # Извлекаем ключ товара (например, "barret_m83")
     key = callback.data.replace('buy_', '')
     data = weapons.get(key)
     
@@ -249,7 +311,6 @@ async def buy_weapon(callback: types.CallbackQuery):
     
     action_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Добавить в корзину", callback_data=f"add_cart_{key}")],
-        [InlineKeyboardButton(text="Купить сразу", callback_data=f"buy_now_{key}")],
         [InlineKeyboardButton(text="Назад в категории", callback_data="back_categories")]
     ])
     
@@ -288,50 +349,6 @@ async def add_to_cart(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-@dp.callback_query(lambda cb: cb.data.startswith('buy_now_'))
-async def buy_now(callback: types.CallbackQuery):
-    key = callback.data.replace('buy_now_', '')
-    data = weapons.get(key)
-    
-    if not data:
-        await callback.answer("Товар не найден")
-        return
-    
-    user_id = callback.from_user.id
-    username = callback.from_user.username if callback.from_user.username else "Нет"
-    name = data['name']
-    price = data['price']
-    
-    order_text = (
-        f"<b>Заказ (сразу):</b>\n"
-        f"Товар: {name}\n"
-        f"Цена: {price:,} руб.\n"
-        f"Покупатель: {user_id} (@{username})"
-    )
-    
-    if user_id not in user_orders:
-        user_orders[user_id] = []
-    user_orders[user_id].append(f"{name} — {price:,} руб. (сразу)")
-    
-    try:
-        await bot.send_message(
-            SELLER_ID,
-            f"<b>Новый заказ (мгновенный)!</b>\n"
-            f"От: {user_id} (@{username})\n"
-            f"{order_text}"
-        )
-        await callback.message.answer(
-            "<b>Заказ успешно отправлен продавцу.</b>\n"
-            "Ожидайте подтверждения в чате с продавцом."
-        )
-    except Exception as e:
-        await callback.message.answer(
-            "<i>Ошибка отправки заказа.</i>\n"
-            "Скопируйте текст и отправьте вручную."
-        )
-    
-    await callback.answer()
-
 @dp.callback_query(lambda cb: cb.data == 'checkout')
 async def checkout(callback: types.CallbackQuery):
     user_id = callback.from_user.id
@@ -342,46 +359,30 @@ async def checkout(callback: types.CallbackQuery):
         await callback.answer()
         return
     
-    username = callback.from_user.username if callback.from_user.username else "Нет"
-    total = 0
-    order_items = []
-    
+    # Формируем список товаров для анкеты
+    items_list = []
     for key, data in cart.items():
         name = weapons[key]['name']
-        price = data['price']
         qty = data['qty']
-        subtotal = price * qty
-        total += subtotal
-        order_items.append(f"{name} x{qty} — {subtotal:,} руб.")
+        items_list.append(f"{name} x{qty}")
     
-    order_text = (
-        f"<b>Заказ из корзины:</b>\n"
-        + "\n".join(order_items) +
-        f"\n<b>Итого: {total:,} руб.</b>\n"
-        f"Покупатель: {user_id} (@{username})"
+    items_text = ", ".join(items_list)
+    
+    # Сохраняем состояние анкеты
+    user_forms[user_id] = {
+        'items': items_text,
+        'cart': cart.copy()
+    }
+    
+    await callback.message.answer(
+        "<b>АНКЕТА ДЛЯ ОФОРМЛЕНИЯ ЗАКАЗА</b>\n"
+        "——————————\n"
+        f"Товар и количество: {items_text}\n"
+        "——————————\n"
+        "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
+        "<b>Укажите регион / район:</b>\n"
+        "<i>(например: Центральный, Приморский)</i>"
     )
-    
-    if user_id not in user_orders:
-        user_orders[user_id] = []
-    user_orders[user_id].append(f"Корзина — {total:,} руб. ({len(cart)} товаров)")
-    
-    try:
-        await bot.send_message(
-            SELLER_ID,
-            f"<b>Новый заказ из корзины!</b>\n"
-            f"{order_text}"
-        )
-        await callback.message.answer(
-            "<b>Заказ успешно отправлен продавцу.</b>\n"
-            "Ожидайте подтверждения."
-        )
-        user_carts[user_id] = {}
-    except Exception as e:
-        await callback.message.answer(
-            "<i>Ошибка отправки заказа.</i>\n"
-            "Скопируйте текст и отправьте вручную."
-        )
-    
     await callback.answer()
 
 @dp.callback_query(lambda cb: cb.data == 'clear_cart')
