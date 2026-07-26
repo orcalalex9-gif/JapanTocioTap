@@ -428,8 +428,8 @@ async def handle_user_message(message: types.Message):
                 await message.answer("<i>Ошибка отправки заказа. Попробуйте позже.</i>")
             return
         
-        # Отправляем следующий вопрос
-        next_prompt = prompts[form_data['step']]
+        # Отправляем следующий вопрос (исправлено: теперь берём prompts[step-1])
+        next_prompt = prompts[form_data['step'] - 1]
         await message.answer(next_prompt)
         return
     
