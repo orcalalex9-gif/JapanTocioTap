@@ -23,9 +23,10 @@ main_kb = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# ========== ТОВАРЫ ==========
+# ========== ТОВАРЫ (ОБНОВЛЁННЫЕ) ==========
 weapons = {
-    'barret_m83': {'name': 'Barret M83', 'price': 3500000, 'stock': 1, 'category': 'Оружие'},
+    # ===== ОРУЖИЕ =====
+    'barret_m82': {'name': 'Barret M82', 'price': 3500000, 'stock': 1, 'category': 'Оружие'},
     'm4a1': {'name': 'M4A1', 'price': 1500000, 'stock': 12, 'category': 'Оружие'},
     'svd': {'name': 'CВД', 'price': 1500000, 'stock': 3, 'category': 'Оружие'},
     'ak74': {'name': 'AK-74', 'price': 1500000, 'stock': 32, 'category': 'Оружие'},
@@ -36,17 +37,38 @@ weapons = {
     'glock17': {'name': 'Glock-17', 'price': 300000, 'stock': 45, 'category': 'Оружие'},
     'glock18': {'name': 'Glock-18', 'price': 250000, 'stock': 14, 'category': 'Оружие'},
     'kedr': {'name': 'Кeдp (ПП-91)', 'price': 250000, 'stock': 9, 'category': 'Оружие'},
-    'tt': {'name': 'TT', 'price': 150000, 'stock': 20, 'category': 'Оружие'},
+    'tt': {'name': 'ТТ', 'price': 150000, 'stock': 20, 'category': 'Оружие'},
     'pm': {'name': 'ПM', 'price': 80000, 'stock': 50, 'category': 'Оружие'},
     'obrez': {'name': 'Обpeз', 'price': 80000, 'stock': 25, 'category': 'Оружие'},
     'silencer': {'name': 'Глyшитeль 9x19', 'price': 80000, 'stock': 30, 'category': 'Оружие'},
     'grenade': {'name': 'Гpaнaтa Ф-1', 'price': 12500, 'stock': 120, 'category': 'Оружие'},
+
+    # ===== ДОКУМЕНТЫ =====
     'digital_scan': {'name': 'Цифровой скан', 'price': 1500, 'stock': None, 'category': 'Документы'},
     'personal_data': {'name': 'Данные личности', 'price': 7000, 'stock': None, 'category': 'Документы'},
     'drivers_license': {'name': 'Права (пластик)', 'price': 52800, 'stock': None, 'category': 'Документы'},
     'passport_rf': {'name': 'Паспорт РФ', 'price': 178000, 'stock': None, 'category': 'Документы'},
     'foreign_passport_no_chip': {'name': 'Зарубежка (без чипа)', 'price': 350000, 'stock': None, 'category': 'Документы'},
     'foreign_passport_chip': {'name': 'Зарубежка (с чипом)', 'price': 950000, 'stock': None, 'category': 'Документы'},
+
+    # ===== ХИМИЯ =====
+    'marijuana': {'name': 'Марихуана', 'price': 2000, 'stock': None, 'category': 'Химия'},
+    'hashish': {'name': 'Гашиш', 'price': 3000, 'stock': None, 'category': 'Химия'},
+    'methamphetamine': {'name': 'Метамфетамин', 'price': 5000, 'stock': None, 'category': 'Химия'},
+    'cocaine': {'name': 'Кокаин', 'price': 10000, 'stock': None, 'category': 'Химия'},
+
+    # ===== АВТО-УГОН =====
+    'simple_signs': {'name': 'Простые знаки', 'price': 10000, 'stock': None, 'category': 'Авто-угон'},
+    'elite_duplicates': {'name': 'Элитные дубликаты', 'price': 15000, 'stock': None, 'category': 'Авто-угон'},
+    'lockpick_kit': {'name': 'Комплект отмычек и сканер', 'price': 35000, 'stock': 15, 'category': 'Авто-угон'},
+    'anti_tracker': {'name': 'Программа-антитрекер', 'price': 70000, 'stock': 8, 'category': 'Авто-угон'},
+
+    # ===== СВЯЗЬ И СПЕЦСРЕДСТВА =====
+    'burner_phone': {'name': 'Одноразовый телефон (Burner Phone)', 'price': 10000, 'stock': 25, 'category': 'Связь'},
+    'jammer': {'name': 'Портативная глушилка сигнала', 'price': 120000, 'stock': 5, 'category': 'Связь'},
+
+    # ===== УСЛУГИ =====
+    'sportiki': {'name': 'Спортики (Силовой выезд)', 'price': 150000, 'stock': None, 'category': 'Услуги'},
 }
 
 # ========== БАЗЫ ДАННЫХ ==========
@@ -60,6 +82,10 @@ def get_shop_kb():
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Оружие", callback_data="cat_Оружие")],
         [InlineKeyboardButton(text="Документы", callback_data="cat_Документы")],
+        [InlineKeyboardButton(text="Химия", callback_data="cat_Химия")],
+        [InlineKeyboardButton(text="Авто-угон", callback_data="cat_Авто-угон")],
+        [InlineKeyboardButton(text="Связь", callback_data="cat_Связь")],
+        [InlineKeyboardButton(text="Услуги", callback_data="cat_Услуги")],
         [InlineKeyboardButton(text="Назад", callback_data="back_main")]
     ])
     return kb
@@ -70,9 +96,10 @@ def get_items_kb(category):
     for key, data in weapons.items():
         if data['category'] == category:
             stock_text = "∞" if data['stock'] is None else data['stock']
+            price_text = f"{data['price']:,} руб." if data['price'] != 150000 else f"от {data['price']:,} руб."
             kb.inline_keyboard.append([
                 InlineKeyboardButton(
-                    text=f"{index}. {data['name']} — {data['price']:,} руб. | Остаток: {stock_text}".replace(',', ' '),
+                    text=f"{index}. {data['name']} — {price_text} | Остаток: {stock_text}".replace(',', ' '),
                     callback_data=f"buy_{key}"
                 )
             ])
@@ -141,7 +168,7 @@ async def start(message: types.Message):
     user_carts[user_id] = {}
     await message.answer(
         "<b>Добро пожаловать.</b>\n"
-        "<i>Здесь можно заказать вооружение и документы.</i>\n"
+        "<i>Здесь можно заказать вооружение, документы, химию и услуги.</i>\n"
         "Выберите действие:",
         reply_markup=main_kb
     )
@@ -380,6 +407,7 @@ async def buy_weapon(callback: types.CallbackQuery):
     stock = data['stock']
     user_id = callback.from_user.id
     
+    # Проверка на остаток для товаров с ограничением
     if stock is not None and stock <= 0:
         await callback.message.answer(
             f"<b>{name}</b>\n"
@@ -394,11 +422,12 @@ async def buy_weapon(callback: types.CallbackQuery):
         [InlineKeyboardButton(text="Назад в категории", callback_data="back_categories")]
     ])
     
-    stock_text = "∞ (неограничено)" if stock is None else stock
+    stock_text = "∞" if stock is None else stock
+    price_text = f"{price:,} руб." if price != 150000 else f"от {price:,} руб."
     
     await callback.message.answer(
         f"<b>{name}</b>\n"
-        f"Цена: <b>{price:,}</b> руб.\n"
+        f"Цена: <b>{price_text}</b>\n"
         f"Остаток: <b>{stock_text}</b>\n\n"
         f"<i>Выберите действие:</i>",
         reply_markup=action_kb
@@ -418,6 +447,21 @@ async def add_to_cart(callback: types.CallbackQuery):
     if user_id not in user_carts:
         user_carts[user_id] = {}
     
+    # Проверка лимита для товаров с ограниченным остатком
+    stock = data['stock']
+    current_qty = user_carts[user_id].get(key, {}).get('qty', 0)
+    
+    if stock is not None and current_qty >= stock:
+        await callback.message.answer(
+            f"<b>Ошибка!</b>\n"
+            f"Вы достигли лимита на товар <b>{data['name']}</b>.\n"
+            f"Доступно на складе: <b>{stock}</b> шт.\n"
+            f"У вас уже добавлено: <b>{current_qty}</b> шт."
+        )
+        await callback.answer()
+        return
+    
+    # Добавление в корзину
     if key in user_carts[user_id]:
         user_carts[user_id][key]['qty'] += 1
     else:
@@ -442,7 +486,20 @@ async def change_cart_quantity(callback: types.CallbackQuery):
         await callback.answer("Товар не найден в корзине")
         return
     
+    stock = weapons[key]['stock']
+    current_qty = cart[key]['qty']
+    
     if action == 'inc':
+        # Проверка лимита при увеличении
+        if stock is not None and current_qty >= stock:
+            await callback.message.answer(
+                f"<b>Ошибка!</b>\n"
+                f"Вы достигли лимита на товар <b>{weapons[key]['name']}</b>.\n"
+                f"Доступно на складе: <b>{stock}</b> шт.\n"
+                f"У вас уже добавлено: <b>{current_qty}</b> шт."
+            )
+            await callback.answer()
+            return
         cart[key]['qty'] += 1
     elif action == 'dec':
         if cart[key]['qty'] > 1:
