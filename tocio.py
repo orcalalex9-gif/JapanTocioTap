@@ -375,10 +375,13 @@ async def exit_chat(message: types.Message):
     else:
         await message.answer("<i>Вы не находитесь в чате.</i>")
 
-# ========== КОЛБЭКИ ==========
+# ========== КОЛБЭКИ (С УДАЛЕНИЕМ СООБЩЕНИЙ) ==========
 @dp.callback_query(lambda cb: cb.data.startswith('cat_'))
 async def show_category(callback: types.CallbackQuery):
     category = callback.data.replace('cat_', '')
+    # Удаляем предыдущее сообщение с выбором категорий
+    await callback.message.delete()
+    # Отправляем новое сообщение с товарами категории
     await callback.message.answer(
         f"<b>Категория: {category}</b>",
         reply_markup=get_items_kb(category)
@@ -387,6 +390,9 @@ async def show_category(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data == 'back_categories')
 async def back_categories(callback: types.CallbackQuery):
+    # Удаляем сообщение со списком товаров
+    await callback.message.delete()
+    # Отправляем меню категорий
     await callback.message.answer(
         "<b>Выберите категорию:</b>",
         reply_markup=get_shop_kb()
@@ -407,8 +413,8 @@ async def buy_weapon(callback: types.CallbackQuery):
     stock = data['stock']
     user_id = callback.from_user.id
     
-    # Проверка на остаток для товаров с ограничением
     if stock is not None and stock <= 0:
+        await callback.message.delete()
         await callback.message.answer(
             f"<b>{name}</b>\n"
             f"Цена: <b>{price:,}</b> руб.\n"
@@ -425,6 +431,7 @@ async def buy_weapon(callback: types.CallbackQuery):
     stock_text = "∞" if stock is None else stock
     price_text = f"{price:,} руб." if price != 150000 else f"от {price:,} руб."
     
+    await callback.message.delete()
     await callback.message.answer(
         f"<b>{name}</b>\n"
         f"Цена: <b>{price_text}</b>\n"
@@ -447,11 +454,11 @@ async def add_to_cart(callback: types.CallbackQuery):
     if user_id not in user_carts:
         user_carts[user_id] = {}
     
-    # Проверка лимита для товаров с ограниченным остатком
     stock = data['stock']
     current_qty = user_carts[user_id].get(key, {}).get('qty', 0)
     
     if stock is not None and current_qty >= stock:
+        await callback.message.delete()
         await callback.message.answer(
             f"<b>Ошибка!</b>\n"
             f"Вы достигли лимита на товар <b>{data['name']}</b>.\n"
@@ -461,7 +468,6 @@ async def add_to_cart(callback: types.CallbackQuery):
         await callback.answer()
         return
     
-    # Добавление в корзину
     if key in user_carts[user_id]:
         user_carts[user_id][key]['qty'] += 1
     else:
@@ -490,8 +496,8 @@ async def change_cart_quantity(callback: types.CallbackQuery):
     current_qty = cart[key]['qty']
     
     if action == 'inc':
-        # Проверка лимита при увеличении
         if stock is not None and current_qty >= stock:
+            await callback.message.delete()
             await callback.message.answer(
                 f"<b>Ошибка!</b>\n"
                 f"Вы достигли лимита на товар <b>{weapons[key]['name']}</b>.\n"
@@ -527,7 +533,7 @@ async def change_cart_quantity(callback: types.CallbackQuery):
 @dp.callback_query(lambda cb: cb.data == 'back_to_cart')
 async def back_to_cart_callback(callback: types.CallbackQuery):
     user_id = callback.from_user.id
-    await callback.message.edit_text("<b>Возврат в корзину...</b>")
+    await callback.message.delete()
     await view_cart(callback.message)
     await callback.answer()
 
@@ -581,6 +587,7 @@ async def checkout(callback: types.CallbackQuery):
         'cart': cart.copy()
     }
     
+    await callback.message.delete()
     await callback.message.answer(
         "<b>АНКЕТА ДЛЯ ОФОРМЛЕНИЯ ЗАКАЗА</b>\n"
         "——————————\n"
@@ -596,11 +603,13 @@ async def checkout(callback: types.CallbackQuery):
 async def clear_cart(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     user_carts[user_id] = {}
+    await callback.message.delete()
     await callback.message.answer("<b>Корзина очищена.</b>")
     await callback.answer()
 
 @dp.callback_query(lambda cb: cb.data == 'back_shop')
 async def back_shop(callback: types.CallbackQuery):
+    await callback.message.delete()
     await callback.message.answer(
         "<b>Выберите категорию:</b>",
         reply_markup=get_shop_kb()
@@ -609,6 +618,7 @@ async def back_shop(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data == 'back_main')
 async def back_main(callback: types.CallbackQuery):
+    await callback.message.delete()
     await callback.message.answer("<b>Возврат в главное меню.</b>", reply_markup=main_kb)
     await callback.answer()
 
@@ -620,6 +630,7 @@ async def select_seller(callback: types.CallbackQuery):
     
     if seller == 'smir':
         user_sessions[user_id] = 'chat_mode'
+        await callback.message.delete()
         await callback.message.answer(
             "<b>Вы подключены к модеру Smir.</b>\n"
             "<i>Напишите сообщение. Оно будет отправлено модеру.</i>\n"
@@ -638,6 +649,7 @@ async def reply_to_buyer(callback: types.CallbackQuery):
     
     user_sessions[user_id] = f'reply_mode_{buyer_id}'
     
+    await callback.message.delete()
     await callback.message.answer(
         f"<b>Ответ покупателю (ID: {buyer_id})</b>\n"
         "<i>Напишите текст ответа:</i>"
