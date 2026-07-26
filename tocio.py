@@ -23,7 +23,7 @@ main_kb = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# ========== ТОВАРЫ (ОБНОВЛЁННЫЕ) ==========
+# ========== ТОВАРЫ ==========
 weapons = {
     # ===== ОРУЖИЕ =====
     'barret_m82': {'name': 'Barret M82', 'price': 3500000, 'stock': 1, 'category': 'Оружие'},
@@ -161,6 +161,112 @@ def get_cart_item_text(key: str, user_id: int) -> str:
         f"<i>Используйте кнопки + и - для изменения количества.</i>"
     )
 
+# ========== ФУНКЦИИ ДЛЯ АНКЕТ ==========
+def get_form_template(category: str, items_text: str) -> tuple:
+    """Возвращает текст анкеты и список полей для заполнения"""
+    templates = {
+        'Оружие': {
+            'text': (
+                "<b>АНКЕТА ДЛЯ ОФОРМЛЕНИЯ ЗАКАЗА (Оружие)</b>\n"
+                "——————————\n"
+                f"Товар и количество: {items_text}\n"
+                "——————————\n"
+                "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
+                "<b>Укажите регион / район:</b>"
+            ),
+            'fields': ['region', 'hideout', 'time', 'payment'],
+            'prompts': [
+                "<b>Укажите тип тайника:</b>\n<i>Магнит / Тайник в лесу / Прикоп</i>",
+                "<b>Укажите удобное время для забора:</b>\n<i>День / Ночь / Не имеет значения</i>",
+                "<b>Укажите способ оплаты:</b>\n<i>Крипта / Перевод на карту</i>"
+            ]
+        },
+        'Документы': {
+            'text': (
+                "<b>АНКЕТА ДЛЯ ОФОРМЛЕНИЯ ЗАКАЗА (Документы)</b>\n"
+                "——————————\n"
+                f"Товар и количество: {items_text}\n"
+                "——————————\n"
+                "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
+                "<b>Укажите регион / район:</b>"
+            ),
+            'fields': ['region', 'full_name', 'birth_date', 'doc_series', 'payment'],
+            'prompts': [
+                "<b>Укажите ФИО полностью:</b>",
+                "<b>Укажите дату рождения:</b>",
+                "<b>Укажите серию и номер документа:</b>",
+                "<b>Укажите способ оплаты:</b>\n<i>Крипта / Перевод на карту</i>"
+            ]
+        },
+        'Химия': {
+            'text': (
+                "<b>АНКЕТА ДЛЯ ОФОРМЛЕНИЯ ЗАКАЗА (Химия)</b>\n"
+                "——————————\n"
+                f"Товар и количество: {items_text}\n"
+                "——————————\n"
+                "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
+                "<b>Укажите регион / район:</b>"
+            ),
+            'fields': ['region', 'hideout', 'time', 'payment'],
+            'prompts': [
+                "<b>Укажите тип тайника:</b>\n<i>Магнит / Тайник в лесу / Прикоп</i>",
+                "<b>Укажите удобное время для забора:</b>\n<i>День / Ночь / Не имеет значения</i>",
+                "<b>Укажите способ оплаты:</b>\n<i>Крипта / Перевод на карту</i>"
+            ]
+        },
+        'Авто-угон': {
+            'text': (
+                "<b>АНКЕТА ДЛЯ ОФОРМЛЕНИЯ ЗАКАЗА (Авто-угон)</b>\n"
+                "——————————\n"
+                f"Товар и количество: {items_text}\n"
+                "——————————\n"
+                "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
+                "<b>Укажите регион / район:</b>"
+            ),
+            'fields': ['region', 'car_brand', 'car_year', 'payment'],
+            'prompts': [
+                "<b>Укажите марку и модель авто:</b>",
+                "<b>Укажите год выпуска:</b>",
+                "<b>Укажите способ оплаты:</b>\n<i>Крипта / Перевод на карту</i>"
+            ]
+        },
+        'Связь': {
+            'text': (
+                "<b>АНКЕТА ДЛЯ ОФОРМЛЕНИЯ ЗАКАЗА (Связь и спецсредства)</b>\n"
+                "——————————\n"
+                f"Товар и количество: {items_text}\n"
+                "——————————\n"
+                "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
+                "<b>Укажите регион / район:</b>"
+            ),
+            'fields': ['region', 'extra', 'payment'],
+            'prompts': [
+                "<b>Дополнительные пожелания:</b>",
+                "<b>Укажите способ оплаты:</b>\n<i>Крипта / Перевод на карту</i>"
+            ]
+        },
+        'Услуги': {
+            'text': (
+                "<b>АНКЕТА ДЛЯ ОФОРМЛЕНИЯ ЗАКАЗА (Силовой выезд)</b>\n"
+                "——————————\n"
+                f"Услуга: {items_text}\n"
+                "——————————\n"
+                "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
+                "<b>Укажите регион / район:</b>"
+            ),
+            'fields': ['region', 'target_name', 'target_address', 'task_desc', 'payment'],
+            'prompts': [
+                "<b>Укажите ФИО цели:</b>",
+                "<b>Укажите адрес цели:</b>",
+                "<b>Опишите задачу подробно:</b>",
+                "<b>Укажите способ оплаты:</b>\n<i>Крипта / Перевод на карту</i>"
+            ]
+        }
+    }
+    
+    template = templates.get(category, templates['Оружие'])
+    return template['text'], template['fields'], template['prompts']
+
 # ========== ОБРАБОТЧИКИ СООБЩЕНИЙ ==========
 @dp.message(Command('start'))
 async def start(message: types.Message):
@@ -243,49 +349,57 @@ async def contacts(message: types.Message):
         "<b>Запасной:</b> @smirspambot"
     )
 
-# ========== ОБРАБОТКА СООБЩЕНИЙ ОТ КЛИЕНТОВ ==========
+# ========== ОБРАБОТКА СООБЩЕНИЙ ОТ КЛИЕНТОВ (АНКЕТА) ==========
 @dp.message(lambda msg: msg.text and not msg.text.startswith('/') and msg.from_user.id != SELLER_ID)
 async def handle_user_message(message: types.Message):
     user_id = message.from_user.id
     text = message.text.strip()
     
-    # АНКЕТА
+    # ===== АНКЕТА =====
     if user_id in user_forms:
         form_data = user_forms[user_id]
-        if 'region' not in form_data:
-            form_data['region'] = text
-            await message.answer(
-                "<b>Укажите тип тайника:</b>\n"
-                "<i>Магнит / Тайник в лесу / Прикоп</i>"
-            )
-            return
-        elif 'hideout' not in form_data:
-            form_data['hideout'] = text
-            await message.answer(
-                "<b>Укажите удобное время для забора:</b>\n"
-                "<i>День / Ночь / Не имеет значения</i>"
-            )
-            return
-        elif 'time' not in form_data:
-            form_data['time'] = text
-            await message.answer(
-                "<b>Укажите способ оплаты:</b>\n"
-                "<i>Крипта / Перевод на карту</i>"
-            )
-            return
-        elif 'payment' not in form_data:
-            form_data['payment'] = text
-            username = message.from_user.username if message.from_user.username else "Нет"
+        fields = form_data['fields']
+        prompts = form_data['prompts']
+        step = form_data['step']
+        
+        # Сохраняем ответ
+        current_field = fields[step]
+        form_data[current_field] = text
+        form_data['step'] = step + 1
+        
+        # Проверяем, заполнены ли все поля
+        if form_data['step'] >= len(fields):
+            # Все поля заполнены — отправляем заказ
+            category = form_data['category']
+            items_text = form_data['items']
+            
+            # Формируем текст заказа
+            order_lines = [f"Товар: {items_text}"]
+            for field in fields:
+                label_map = {
+                    'region': 'Регион / Район',
+                    'hideout': 'Тип тайника',
+                    'time': 'Время забора',
+                    'payment': 'Способ оплаты',
+                    'full_name': 'ФИО',
+                    'birth_date': 'Дата рождения',
+                    'doc_series': 'Серия и номер документа',
+                    'car_brand': 'Марка и модель авто',
+                    'car_year': 'Год выпуска',
+                    'extra': 'Дополнительные пожелания',
+                    'target_name': 'ФИО цели',
+                    'target_address': 'Адрес цели',
+                    'task_desc': 'Описание задачи'
+                }
+                label = label_map.get(field, field)
+                order_lines.append(f"{label}: {form_data.get(field, '—')}")
+            
             order_text = (
-                f"<b>Новый заказ (анкета):</b>\n"
+                f"<b>Новый заказ ({category}):</b>\n"
                 f"——————————\n"
-                f"Товар: {form_data['items']}\n"
-                f"Регион / Район: {form_data['region']}\n"
-                f"Тип тайника: {form_data['hideout']}\n"
-                f"Время забора: {form_data['time']}\n"
-                f"Способ оплаты: {form_data['payment']}\n"
-                f"——————————\n"
-                f"Покупатель: {user_id} (@{username})"
+                + "\n".join(order_lines) +
+                f"\n——————————\n"
+                f"Покупатель: {user_id} (@{message.from_user.username if message.from_user.username else 'Нет'})"
             )
             
             try:
@@ -307,14 +421,19 @@ async def handle_user_message(message: types.Message):
                 )
                 if user_id not in user_orders:
                     user_orders[user_id] = []
-                user_orders[user_id].append(f"Анкета — {form_data['items']}")
+                user_orders[user_id].append(f"{category} — {form_data['items']}")
                 user_carts[user_id] = {}
                 del user_forms[user_id]
             except Exception as e:
                 await message.answer("<i>Ошибка отправки заказа. Попробуйте позже.</i>")
             return
+        
+        # Отправляем следующий вопрос
+        next_prompt = prompts[form_data['step']]
+        await message.answer(next_prompt)
+        return
     
-    # ЧАТ С МОДЕРОМ
+    # ===== ЧАТ С МОДЕРОМ =====
     if user_id in user_sessions and user_sessions[user_id] == 'chat_mode':
         try:
             reply_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -375,13 +494,11 @@ async def exit_chat(message: types.Message):
     else:
         await message.answer("<i>Вы не находитесь в чате.</i>")
 
-# ========== КОЛБЭКИ (С УДАЛЕНИЕМ СООБЩЕНИЙ) ==========
+# ========== КОЛБЭКИ ==========
 @dp.callback_query(lambda cb: cb.data.startswith('cat_'))
 async def show_category(callback: types.CallbackQuery):
     category = callback.data.replace('cat_', '')
-    # Удаляем предыдущее сообщение с выбором категорий
     await callback.message.delete()
-    # Отправляем новое сообщение с товарами категории
     await callback.message.answer(
         f"<b>Категория: {category}</b>",
         reply_markup=get_items_kb(category)
@@ -390,9 +507,7 @@ async def show_category(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data == 'back_categories')
 async def back_categories(callback: types.CallbackQuery):
-    # Удаляем сообщение со списком товаров
     await callback.message.delete()
-    # Отправляем меню категорий
     await callback.message.answer(
         "<b>Выберите категорию:</b>",
         reply_markup=get_shop_kb()
@@ -574,29 +689,33 @@ async def checkout(callback: types.CallbackQuery):
         await callback.answer()
         return
     
+    # Определяем категорию товаров в корзине (берём первую)
+    first_key = list(cart.keys())[0]
+    category = weapons[first_key]['category']
+    
+    # Формируем список товаров
     items_list = []
     for key, data in cart.items():
         name = weapons[key]['name']
         qty = data['qty']
         items_list.append(f"{name} x{qty}")
-    
     items_text = ", ".join(items_list)
     
+    # Получаем шаблон анкеты для категории
+    form_text, fields, prompts = get_form_template(category, items_text)
+    
+    # Сохраняем состояние анкеты
     user_forms[user_id] = {
         'items': items_text,
+        'category': category,
+        'fields': fields,
+        'prompts': prompts,
+        'step': 0,
         'cart': cart.copy()
     }
     
     await callback.message.delete()
-    await callback.message.answer(
-        "<b>АНКЕТА ДЛЯ ОФОРМЛЕНИЯ ЗАКАЗА</b>\n"
-        "——————————\n"
-        f"Товар и количество: {items_text}\n"
-        "——————————\n"
-        "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-        "<b>Укажите регион / район:</b>\n"
-        "<i>(например: Центральный, Приморский)</i>"
-    )
+    await callback.message.answer(form_text)
     await callback.answer()
 
 @dp.callback_query(lambda cb: cb.data == 'clear_cart')
