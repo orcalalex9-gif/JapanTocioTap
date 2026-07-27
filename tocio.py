@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 import pytz
 import os
+import re
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
@@ -36,6 +37,64 @@ def is_working_hours() -> bool:
     now = datetime.now(tz)
     return 8 <= now.hour < 22
 
+# ========== ПРОВЕРКА РЕГИОНА ==========
+def validate_region(region: str) -> bool:
+    region = region.strip()
+    if len(region) < 2 or len(region) > 50:
+        return False
+    if region.isdigit():
+        return False
+    vowels = 'аеёиоуыэюяaeiou'
+    if not any(char in region.lower() for char in vowels):
+        return False
+    if len(set(region)) < 3:
+        return False
+    return True
+
+# ========== БАЗА ГОРОДОВ ==========
+CITY_DIFFICULTY = {
+    # Крупные города — 1
+    'москва': 1, 'санкт-петербург': 1, 'сочи': 1, 'владивосток': 1,
+    'екатеринбург': 1, 'новосибирск': 1, 'казань': 1, 'краснодар': 1,
+    'нижний новгород': 1, 'челябинск': 1, 'самара': 1, 'омск': 1,
+    'ростов-на-дону': 1, 'уфа': 1, 'красноярск': 1, 'пермь': 1,
+    'воронеж': 1, 'волгоград': 1, 'тюмень': 1, 'иркутск': 1,
+    'хабаровск': 1, 'новокузнецк': 1, 'кемерово': 1, 'томск': 1,
+
+    # Средние города — 2
+    'ярославль': 2, 'рязань': 2, 'липецк': 2, 'тула': 2,
+    'калуга': 2, 'тверь': 2, 'владимир': 2, 'иваново': 2,
+    'кострома': 2, 'псков': 2, 'новгород': 2, 'смоленск': 2,
+    'брянск': 2, 'курск': 2, 'орёл': 2, 'белгород': 2,
+    'тамбов': 2, 'пенза': 2, 'ульяновск': 2, 'саратов': 2,
+    'астрахань': 2, 'ижевск': 2, 'киров': 2, 'йошкар-ола': 2,
+    'чебоксары': 2, 'саранск': 2, 'владикавказ': 2, 'нальчик': 2,
+    'черкесск': 2, 'майкоп': 2, 'ставрополь': 2, 'севастополь': 2,
+
+    # Малые города — 3
+    'бийск': 3, 'рубцовск': 3, 'барнаул': 3, 'горно-алтайск': 3,
+    'абакан': 3, 'минусинск': 3, 'кызыл': 3, 'улан-удэ': 3,
+    'чита': 3, 'благовещенск': 3, 'комсомольск-на-амуре': 3,
+    'петропавловск-камчатский': 3, 'магадан': 3, 'анадырь': 3,
+    'мурманск': 3, 'архангельск': 3, 'петрозаводск': 3,
+    'сыктывкар': 3, 'воткинск': 3, 'грозный': 3, 'махачкала': 3,
+    'назрань': 3, 'элиста': 3, 'королев': 3, 'мытищи': 3,
+    'люберцы': 3, 'подольск': 3, 'дзержинск': 3, 'арзамас': 3,
+}
+
+def get_delivery_time(region: str) -> str:
+    region_lower = region.lower().strip()
+    difficulty = CITY_DIFFICULTY.get(region_lower, 3)
+    if difficulty == 1:
+        return "1–2 дня"
+    elif difficulty == 2:
+        return "2–3 дня"
+    elif difficulty == 3:
+        return "3–5 дней"
+    else:
+        return "5–7 дней"
+
+# ========== ОСТАЛЬНОЙ КОД ==========
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text='Магазин'), KeyboardButton(text='Корзина')],
@@ -118,10 +177,8 @@ def save_order(client_id: int, seller_id: int, items: str, category: str, total:
         current_profit = stats.get('total_profit', 0)
         worker_percent = get_worker_percentage(current_profit)
         creator_percent = 100 - worker_percent
-        
         worker_amount = int(total * worker_percent / 100)
         creator_amount = int(total * creator_percent / 100)
-        
         result = supabase.table('orders').insert({
             'client_id': client_id,
             'seller_id': seller_id,
@@ -134,12 +191,10 @@ def save_order(client_id: int, seller_id: int, items: str, category: str, total:
             'worker_amount': worker_amount,
             'creator_amount': creator_amount
         }).execute()
-        
         supabase.rpc('increment_orders', {
             'seller_id': seller_id, 
             'profit': total
         }).execute()
-        
         if result.data and len(result.data) > 0:
             return result.data[0]['id']
         return None
@@ -359,10 +414,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
 async def start(message: types.Message):
     user_id = message.from_user.id
     user_carts[user_id] = {}
-    
     save_user(user_id, message.from_user.username)
-    
-    # Если пользователь — продавец
     if user_id in SELLER_IDS:
         await message.answer(
             "<b>Панель управления.</b>\n"
@@ -385,19 +437,14 @@ async def start(message: types.Message):
             reply_markup=main_kb
         )
         return
-    
     if not is_working_hours():
         await message.answer(
             "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
             "<i>Напишите позже.</i>"
         )
         return
-    
-    # ===== ПРОВЕРКА: ЕСТЬ ЛИ КЛИЕНТ УЖЕ В СИСТЕМЕ =====
     existing_seller = get_seller_for_user(user_id)
-    
     if existing_seller is not None:
-        # Клиент уже назначен продавцу → просто приветствуем
         seller_name = "Smir" if existing_seller == SELLER_SMIR else "Сахар"
         await message.answer(
             f"<b>Добро пожаловать.</b>\n"
@@ -406,10 +453,7 @@ async def start(message: types.Message):
             reply_markup=main_kb
         )
         return
-    
-    # ===== НОВЫЙ КЛИЕНТ: ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНАМ =====
     username = f"@{message.from_user.username}" if message.from_user.username else "Нет юзернейма"
-    
     for admin_id in SELLER_IDS:
         try:
             assign_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -426,7 +470,6 @@ async def start(message: types.Message):
             )
         except Exception as e:
             logging.error(f"Ошибка отправки уведомления продавцу {admin_id}: {e}")
-    
     await message.answer(
         "<b>Добро пожаловать.</b>\n"
         "<i>Ваш запрос обрабатывается. Ожидайте подтверждения.</i>"
@@ -435,21 +478,16 @@ async def start(message: types.Message):
 @dp.message(Command('stats'))
 async def show_stats(message: types.Message):
     user_id = message.from_user.id
-    
     if user_id not in SELLER_IDS:
         await message.answer("<i>У вас нет прав для этой команды.</i>")
         return
-    
     stats = get_seller_stats(user_id)
     clients_count = stats.get('clients_count', 0)
     orders_count = stats.get('orders_count', 0)
     total_sum = stats.get('total_profit', 0)
-    
     worker_percent = get_worker_percentage(total_sum)
     creator_percent = 100 - worker_percent
-    
     seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар"
-    
     next_levels = [
         (80000, 75, "80 000"),
         (200000, 80, "200 000"),
@@ -464,7 +502,6 @@ async def show_stats(message: types.Message):
             break
     if not next_text:
         next_text = "Вы достигли максимального уровня (90%)!"
-    
     text = (
         f"<b>Статистика продавца {seller_name}:</b>\n"
         f"——————————\n"
@@ -478,7 +515,6 @@ async def show_stats(message: types.Message):
         f"——————————\n"
         f"{next_text}"
     )
-    
     await message.answer(text)
 
 @dp.callback_query(lambda cb: cb.data.startswith('assign_'))
@@ -486,13 +522,10 @@ async def assign_seller(callback: types.CallbackQuery):
     parts = callback.data.split('_')
     user_id = int(parts[1])
     seller_id = int(parts[2])
-    
     if callback.from_user.id not in SELLER_IDS:
         await callback.answer("У вас нет прав.", show_alert=True)
         return
-    
     assign_user_to_seller(user_id, seller_id)
-    
     seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар"
     await bot.send_message(
         user_id,
@@ -501,13 +534,11 @@ async def assign_seller(callback: types.CallbackQuery):
         "Выберите действие:",
         reply_markup=main_kb
     )
-    
     try:
         chat = await bot.get_chat(user_id)
         username = f"@{chat.username}" if chat.username else "Нет юзернейма"
     except:
         username = "Неизвестно"
-    
     await bot.send_message(
         seller_id,
         f"<b>Новый клиент назначен вам.</b>\n"
@@ -517,7 +548,6 @@ async def assign_seller(callback: types.CallbackQuery):
         f"Текущая доля: {get_worker_percentage(get_seller_stats(seller_id).get('total_profit', 0))}%.\n"
         "Чем больше заказов, тем выше твой процент."
     )
-    
     await callback.message.edit_text(
         f"✅ Покупатель {user_id} назначен продавцу {seller_name}."
     )
@@ -551,14 +581,12 @@ async def view_cart(message: types.Message):
         )
         return
     cart = user_carts.get(user_id, {})
-    
     if not cart:
         await message.answer(
             "<b>Корзина пуста.</b>\n"
             "<i>Перейдите в магазин и добавьте товары.</i>"
         )
         return
-    
     text = "<b>Ваша корзина:</b>\n"
     text += "——————————\n"
     total = 0
@@ -572,7 +600,6 @@ async def view_cart(message: types.Message):
         text += f"   Цена: {price:,} руб. x {qty} = {subtotal:,} руб.\n"
     text += "——————————\n"
     text += f"<b>Итого: {total:,} руб.</b>"
-    
     await message.answer(text, reply_markup=get_cart_kb(user_id))
 
 @dp.message(lambda msg: msg.text == 'Чат с продавцом')
@@ -604,7 +631,6 @@ async def my_orders(message: types.Message):
             "<i>Напишите позже.</i>"
         )
         return
-    
     orders = get_user_orders(user_id)
     if not orders:
         await message.answer(
@@ -612,7 +638,6 @@ async def my_orders(message: types.Message):
             "<i>Перейдите в магазин для оформления.</i>"
         )
         return
-    
     text = "<b>Ваши заказы:</b>\n"
     text += "——————————\n"
     status_map = {
@@ -624,14 +649,12 @@ async def my_orders(message: types.Message):
         status_text = status_map.get(order['status'], order['status'])
         text += f"{i}. {order['items']} — {order['total']:,} руб. ({status_text})\n"
     text += "——————————"
-    
     await message.answer(text)
 
 @dp.message(lambda msg: msg.text and not msg.text.startswith('/'))
 async def handle_user_message(message: types.Message):
     user_id = message.from_user.id
     text = message.text.strip()
-    
     if user_id in SELLER_IDS:
         if user_id in user_sessions and user_sessions[user_id].startswith('reply_to_'):
             buyer_id = int(user_sessions[user_id].replace('reply_to_', ''))
@@ -647,19 +670,16 @@ async def handle_user_message(message: types.Message):
                 "<i>Вы в режиме админа. Чтобы ответить покупателю — используйте кнопку 'Ответить' под его сообщением.</i>"
             )
             return
-    
     seller = get_seller_for_user(user_id)
     if seller is None:
         await message.answer("<i>Вы ещё не подключены к продавцу. Напишите /start.</i>")
         return
-    
     if not is_working_hours():
         await message.answer(
             "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
             "<i>Напишите позже.</i>"
         )
         return
-    
     if user_id in user_sessions and user_sessions[user_id] == 'chat_mode':
         reply_kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Ответить", callback_data=f"reply_{user_id}")]
@@ -673,21 +693,17 @@ async def handle_user_message(message: types.Message):
         )
         await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
         return
-    
     if user_id in user_forms:
         form_data = user_forms[user_id]
         fields = form_data['fields']
         prompts = form_data['prompts']
         step = form_data['step']
-        
         current_field = fields[step]
         form_data[current_field] = text
         form_data['step'] = step + 1
-        
         if form_data['step'] >= len(fields):
             category = form_data['category']
             items_text = form_data['items']
-            
             order_lines = [f"Товар: {items_text}"]
             for field in fields:
                 label_map = {
@@ -707,13 +723,11 @@ async def handle_user_message(message: types.Message):
                 }
                 label = label_map.get(field, field)
                 order_lines.append(f"{label}: {form_data.get(field, '—')}")
-            
             username = f"@{message.from_user.username}" if message.from_user.username else "Нет юзернейма"
-            
             order_total = 0
             for key, data in form_data['cart'].items():
                 order_total += data['price'] * data['qty']
-            
+            delivery_time = get_delivery_time(form_data['region'])
             order_text = (
                 f"<b>Новый заказ ({category}):</b>\n"
                 f"——————————\n"
@@ -721,12 +735,11 @@ async def handle_user_message(message: types.Message):
                 f"\n——————————\n"
                 f"Покупатель: {user_id} ({username})\n"
                 f"Сумма заказа: <b>{order_total:,} руб.</b>\n"
+                f"Примерное время закладки: {delivery_time}\n"
                 "——————————\n"
                 f"<b>Правило:</b> Твой процент — {get_worker_percentage(get_seller_stats(seller).get('total_profit', 0))}%."
             )
-            
             order_id = save_order(user_id, seller, items_text, category, order_total)
-            
             if order_id:
                 confirm_kb = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"approve_{order_id}_{user_id}")],
@@ -745,11 +758,9 @@ async def handle_user_message(message: types.Message):
             else:
                 await message.answer("<i>Ошибка сохранения заказа. Попробуйте позже.</i>")
             return
-        
         next_prompt = prompts[form_data['step'] - 1]
         await message.answer(next_prompt)
         return
-    
     await message.answer(
         "<i>Используйте кнопки меню для навигации.</i>"
     )
@@ -760,24 +771,19 @@ async def handle_order_decision(callback: types.CallbackQuery):
     order_id = int(order_id)
     client_id = int(client_id)
     seller_id = callback.from_user.id
-    
     if seller_id not in SELLER_IDS:
         await callback.answer("У вас нет прав.", show_alert=True)
         return
-    
     client_seller = get_seller_for_user(client_id)
     if client_seller != seller_id:
         await callback.answer("Это не ваш клиент.", show_alert=True)
         return
-    
     if action == 'approve':
         update_order_status(order_id, 'approved')
-        
         if seller_id == SELLER_SMIR:
             contact = "@SmirAgent"
         else:
             contact = "@nosugarzero"
-        
         await bot.send_message(
             client_id,
             f"<b>✅ Продавец подтвердил вашу анкету!</b>\n"
@@ -788,10 +794,8 @@ async def handle_order_decision(callback: types.CallbackQuery):
             callback.message.text + "\n\n✅ Заказ подтверждён."
         )
         await callback.answer("Заказ подтверждён.")
-        
     elif action == 'reject':
         update_order_status(order_id, 'rejected')
-        
         await bot.send_message(
             client_id,
             "<b>❌ Ваша анкета отклонена.</b>\n"
@@ -806,11 +810,9 @@ async def handle_order_decision(callback: types.CallbackQuery):
 async def reply_to_buyer(callback: types.CallbackQuery):
     buyer_id = int(callback.data.replace('reply_', ''))
     seller_id = callback.from_user.id
-    
     if seller_id not in SELLER_IDS:
         await callback.answer("У вас нет прав.")
         return
-    
     user_sessions[seller_id] = f'reply_to_{buyer_id}'
     await callback.message.answer(
         f"<b>Ответ покупателю (ID: {buyer_id})</b>\n"
@@ -877,11 +879,9 @@ async def buy_weapon(callback: types.CallbackQuery):
     if not data:
         await callback.answer("Товар не найден")
         return
-    
     name = data['name']
     price = data['price']
     stock = data['stock']
-    
     if stock is not None and stock <= 0:
         await callback.message.delete()
         await callback.message.answer(
@@ -891,15 +891,12 @@ async def buy_weapon(callback: types.CallbackQuery):
         )
         await callback.answer()
         return
-    
     action_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Добавить в корзину", callback_data=f"add_cart_{key}")],
         [InlineKeyboardButton(text="Назад в категории", callback_data="back_categories")]
     ])
-    
     stock_text = "∞" if stock is None else stock
     price_text = f"{price:,} руб." if price != 150000 else f"от {price:,} руб."
-    
     await callback.message.delete()
     await callback.message.answer(
         f"<b>{name}</b>\n"
@@ -925,13 +922,10 @@ async def add_to_cart(callback: types.CallbackQuery):
     if not data:
         await callback.answer("Товар не найден")
         return
-    
     if user_id not in user_carts:
         user_carts[user_id] = {}
-    
     stock = data['stock']
     current_qty = user_carts[user_id].get(key, {}).get('qty', 0)
-    
     if stock is not None and current_qty >= stock:
         await callback.message.delete()
         await callback.message.answer(
@@ -942,12 +936,10 @@ async def add_to_cart(callback: types.CallbackQuery):
         )
         await callback.answer()
         return
-    
     if key in user_carts[user_id]:
         user_carts[user_id][key]['qty'] += 1
     else:
         user_carts[user_id][key] = {'price': data['price'], 'qty': 1}
-    
     text = get_cart_item_text(key, user_id)
     if text:
         await callback.message.edit_text(
@@ -968,15 +960,12 @@ async def change_cart_quantity(callback: types.CallbackQuery):
         return
     action = callback.data[:3]
     key = callback.data[4:]
-    
     cart = user_carts.get(user_id, {})
     if key not in cart:
         await callback.answer("Товар не найден в корзине")
         return
-    
     stock = weapons[key]['stock']
     current_qty = cart[key]['qty']
-    
     if action == 'inc':
         if stock is not None and current_qty >= stock:
             await callback.message.delete()
@@ -1003,7 +992,6 @@ async def change_cart_quantity(callback: types.CallbackQuery):
             )
             await callback.answer()
             return
-    
     text = get_cart_item_text(key, user_id)
     if text:
         await callback.message.edit_text(
@@ -1029,14 +1017,12 @@ async def back_to_cart_callback(callback: types.CallbackQuery):
 async def view_cart(message: types.Message):
     user_id = message.from_user.id if hasattr(message, 'from_user') else message.chat.id
     cart = user_carts.get(user_id, {})
-    
     if not cart:
         await message.answer(
             "<b>Корзина пуста.</b>\n"
             "<i>Перейдите в магазин и добавьте товары.</i>"
         )
         return
-    
     text = "<b>Ваша корзина:</b>\n"
     text += "——————————\n"
     total = 0
@@ -1050,7 +1036,6 @@ async def view_cart(message: types.Message):
         text += f"   Цена: {price:,} руб. x {qty} = {subtotal:,} руб.\n"
     text += "——————————\n"
     text += f"<b>Итого: {total:,} руб.</b>"
-    
     await message.answer(text, reply_markup=get_cart_kb(user_id))
 
 @dp.callback_query(lambda cb: cb.data == 'checkout')
@@ -1064,24 +1049,19 @@ async def checkout(callback: types.CallbackQuery):
         await callback.answer()
         return
     cart = user_carts.get(user_id, {})
-    
     if not cart:
         await callback.message.answer("<b>Корзина пуста.</b>")
         await callback.answer()
         return
-    
     first_key = list(cart.keys())[0]
     category = weapons[first_key]['category']
-    
     items_list = []
     for key, data in cart.items():
         name = weapons[key]['name']
         qty = data['qty']
         items_list.append(f"{name} x{qty}")
     items_text = ", ".join(items_list)
-    
     form_text, fields, prompts = get_form_template(category, items_text)
-    
     user_forms[user_id] = {
         'items': items_text,
         'category': category,
@@ -1090,7 +1070,6 @@ async def checkout(callback: types.CallbackQuery):
         'step': 0,
         'cart': cart.copy()
     }
-    
     await callback.message.delete()
     await callback.message.answer(form_text)
     await callback.answer()
