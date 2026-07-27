@@ -395,13 +395,12 @@ async def start(message: types.Message):
     
     username = f"@{message.from_user.username}" if message.from_user.username else "Нет юзернейма"
     
-    # Отправляем уведомление ВСЕМ продавцам с тремя кнопками
     for admin_id in SELLER_IDS:
         try:
             assign_kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Назначить Smir", callback_data=f"assign_{user_id}_{SELLER_SMIR}")],
                 [InlineKeyboardButton(text="Назначить Сахар", callback_data=f"assign_{user_id}_{SELLER_SAKHAR}")],
-                [InlineKeyboardButton(text="Назначить Юрий", callback_data=f"assign_{user_id}_{SELLER_YURI}")]
+                [InlineKeyboardButton(text="Назначить Олег", callback_data=f"assign_{user_id}_{SELLER_OLEG}")]
             ])
             await bot.send_message(
                 admin_id,
@@ -435,7 +434,7 @@ async def show_stats(message: types.Message):
     worker_percent = get_worker_percentage(total_sum)
     creator_percent = 100 - worker_percent
     
-    seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар" if user_id == SELLER_SAKHAR else "Юрий"
+    seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар" if user_id == SELLER_SAKHAR else "Олег"
     
     next_levels = [
         (80000, 75, "80 000"),
@@ -480,7 +479,7 @@ async def assign_seller(callback: types.CallbackQuery):
     
     assign_user_to_seller(user_id, seller_id)
     
-    seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар" if seller_id == SELLER_SAKHAR else "Юрий"
+    seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар" if seller_id == SELLER_SAKHAR else "Олег"
     await bot.send_message(
         user_id,
         f"<b>Добро пожаловать.</b>\n"
