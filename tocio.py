@@ -2,17 +2,29 @@ import asyncio
 import logging
 from datetime import datetime
 import pytz
+import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from supabase import create_client, Client
 
 API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
 
 SELLER_SMIR = 8187401606
 SELLER_SAKHAR = 8486571400
 SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR]
+
+# ========== ПОДКЛЮЧЕНИЕ К SUPABASE ==========
+SUPABASE_URL = 'https://onngeuzbcjtfswmyukog.supabase.co'
+SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ubmdldXpiY2p0ZnN3bXl1a29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNDQyMTYsImV4cCI6MjEwMDcyMDIxNn0.RPDpxj2z9B9fw2efwYttYuu-SutSFt5p0CFRmCW7znI'  # ЗАМЕНИ НА СВОЙ (НОВЫЙ!)
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    logging.error("SUPABASE_URL или SUPABASE_KEY не заданы!")
+    exit(1)
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -68,13 +80,63 @@ weapons = {
 }
 
 user_sessions = {}
-user_orders = {}
 user_carts = {}
 user_forms = {}
-user_seller = {}
 
-# ========== СТАТИСТИКА ДЛЯ ПРОДАВЦОВ ==========
-seller_stats = {}  # {seller_id: {'clients': [], 'orders': [], 'total': 0}}
+# ========== ФУНКЦИИ РАБОТЫ С БД ==========
+def save_user(user_id: int, username: str = None):
+    try:
+        supabase.table('users').upsert({'id': user_id, 'username': username}).execute()
+    except Exception as e:
+        logging.error(f"Ошибка сохранения пользователя: {e}")
+
+def assign_user_to_seller(user_id: int, seller_id: int):
+    try:
+        supabase.table('clients_sellers').upsert({
+            'client_id': user_id,
+            'seller_id': seller_id
+        }).execute()
+        supabase.rpc('increment_clients', {'seller_id': seller_id}).execute()
+    except Exception as e:
+        logging.error(f"Ошибка назначения продавца: {e}")
+
+def save_order(client_id: int, seller_id: int, items: str, category: str, total: int):
+    try:
+        supabase.table('orders').insert({
+            'client_id': client_id,
+            'seller_id': seller_id,
+            'items': items,
+            'category': category,
+            'total': total
+        }).execute()
+        supabase.rpc('increment_orders', {'seller_id': seller_id, 'profit': total}).execute()
+    except Exception as e:
+        logging.error(f"Ошибка сохранения заказа: {e}")
+
+def get_seller_stats(seller_id: int):
+    try:
+        result = supabase.table('seller_stats').select('*').eq('seller_id', seller_id).execute()
+        if result.data and len(result.data) > 0:
+            return result.data[0]
+        return {'clients_count': 0, 'orders_count': 0, 'total_profit': 0}
+    except:
+        return {'clients_count': 0, 'orders_count': 0, 'total_profit': 0}
+
+def get_user_orders(user_id: int):
+    try:
+        result = supabase.table('orders').select('*').eq('client_id', user_id).order('created_at', desc=True).execute()
+        return result.data if result.data else []
+    except:
+        return []
+
+def get_seller_for_user(user_id: int) -> int:
+    try:
+        result = supabase.table('clients_sellers').select('seller_id').eq('client_id', user_id).execute()
+        if result.data and len(result.data) > 0:
+            return result.data[0]['seller_id']
+        return None
+    except:
+        return None
 
 # ========== КЛАВИАТУРЫ ==========
 def get_shop_kb():
@@ -151,7 +213,6 @@ def get_cart_item_text(key: str, user_id: int) -> str:
         f"<i>Используйте кнопки + и - для изменения количества.</i>"
     )
 
-# ========== АНКЕТЫ ==========
 def get_form_template(category: str, items_text: str) -> tuple:
     templates = {
         'Оружие': {
@@ -261,11 +322,9 @@ async def start(message: types.Message):
     user_id = message.from_user.id
     user_carts[user_id] = {}
     
+    save_user(user_id, message.from_user.username)
+    
     if user_id in SELLER_IDS:
-        # Инициализируем статистику для продавца
-        if user_id not in seller_stats:
-            seller_stats[user_id] = {'clients': [], 'orders': [], 'total': 0}
-        
         await message.answer(
             "<b>Панель управления.</b>\n"
             "<i>Вы продавец. Используйте магазин для тестов.</i>\n"
@@ -322,11 +381,10 @@ async def show_stats(message: types.Message):
         await message.answer("<i>У вас нет прав для этой команды.</i>")
         return
     
-    stats = seller_stats.get(user_id, {'clients': [], 'orders': [], 'total': 0})
-    
-    clients_count = len(stats['clients'])
-    orders_count = len(stats['orders'])
-    total_sum = stats['total']
+    stats = get_seller_stats(user_id)
+    clients_count = stats.get('clients_count', 0)
+    orders_count = stats.get('orders_count', 0)
+    total_sum = stats.get('total_profit', 0)
     
     seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар"
     
@@ -353,13 +411,7 @@ async def assign_seller(callback: types.CallbackQuery):
         await callback.answer("У вас нет прав.", show_alert=True)
         return
     
-    user_seller[user_id] = seller_id
-    
-    # Добавляем клиента в статистику продавца
-    if seller_id not in seller_stats:
-        seller_stats[seller_id] = {'clients': [], 'orders': [], 'total': 0}
-    if user_id not in seller_stats[seller_id]['clients']:
-        seller_stats[seller_id]['clients'].append(user_id)
+    assign_user_to_seller(user_id, seller_id)
     
     seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар"
     await bot.send_message(
@@ -393,7 +445,8 @@ async def assign_seller(callback: types.CallbackQuery):
 @dp.message(lambda msg: msg.text == 'Магазин')
 async def shop(message: types.Message):
     user_id = message.from_user.id
-    if user_id not in user_seller and user_id not in SELLER_IDS:
+    seller = get_seller_for_user(user_id)
+    if seller is None and user_id not in SELLER_IDS:
         await message.answer("<i>Вы ещё не подключены к продавцу. Напишите /start.</i>")
         return
     if user_id not in SELLER_IDS and not is_working_hours():
@@ -444,7 +497,8 @@ async def view_cart(message: types.Message):
 @dp.message(lambda msg: msg.text == 'Чат с продавцом')
 async def chat_with_seller(message: types.Message):
     user_id = message.from_user.id
-    if user_id not in user_seller:
+    seller = get_seller_for_user(user_id)
+    if seller is None:
         await message.answer("<i>Вы ещё не подключены к продавцу. Напишите /start.</i>")
         return
     if user_id not in SELLER_IDS and not is_working_hours():
@@ -469,8 +523,8 @@ async def my_orders(message: types.Message):
             "<i>Напишите позже.</i>"
         )
         return
-    orders = user_orders.get(user_id, [])
     
+    orders = get_user_orders(user_id)
     if not orders:
         await message.answer(
             "<b>У вас нет заказов.</b>\n"
@@ -481,7 +535,7 @@ async def my_orders(message: types.Message):
     text = "<b>Ваши заказы:</b>\n"
     text += "——————————\n"
     for i, order in enumerate(orders, 1):
-        text += f"{i}. {order}\n"
+        text += f"{i}. {order['items']} — {order['total']:,} руб. ({order['status']})\n"
     text += "——————————"
     
     await message.answer(text)
@@ -508,7 +562,8 @@ async def handle_user_message(message: types.Message):
             )
             return
     
-    if user_id not in user_seller:
+    seller = get_seller_for_user(user_id)
+    if seller is None:
         await message.answer("<i>Вы ещё не подключены к продавцу. Напишите /start.</i>")
         return
     
@@ -520,12 +575,11 @@ async def handle_user_message(message: types.Message):
         return
     
     if user_id in user_sessions and user_sessions[user_id] == 'chat_mode':
-        seller_id = user_seller[user_id]
         reply_kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Ответить", callback_data=f"reply_{user_id}")]
         ])
         await bot.send_message(
-            seller_id,
+            seller,
             f"<b>Сообщение от покупателя</b> (ID: {user_id}):\n{text}\n"
             "——————————\n"
             "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.",
@@ -570,7 +624,6 @@ async def handle_user_message(message: types.Message):
             
             username = f"@{message.from_user.username}" if message.from_user.username else "Нет юзернейма"
             
-            # Вычисляем сумму заказа
             order_total = 0
             for key, data in form_data['cart'].items():
                 order_total += data['price'] * data['qty']
@@ -586,22 +639,14 @@ async def handle_user_message(message: types.Message):
                 "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение."
             )
             
-            seller_id = user_seller[user_id]
-            
-            # Обновляем статистику продавца
-            if seller_id in seller_stats:
-                seller_stats[seller_id]['orders'].append(f"{category} — {items_text} ({order_total:,} руб.)")
-                seller_stats[seller_id]['total'] += order_total
+            save_order(user_id, seller, items_text, category, order_total)
             
             try:
-                await bot.send_message(seller_id, order_text)
+                await bot.send_message(seller, order_text)
                 await message.answer(
                     "<b>Заказ успешно отправлен.</b>\n"
                     "Ожидайте подтверждения."
                 )
-                if user_id not in user_orders:
-                    user_orders[user_id] = []
-                user_orders[user_id].append(f"{category} — {form_data['items']} ({order_total:,} руб.)")
                 user_carts[user_id] = {}
                 del user_forms[user_id]
             except:
