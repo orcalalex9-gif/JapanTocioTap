@@ -15,8 +15,8 @@ API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
 # ========== ПРОДАВЦЫ ==========
 SELLER_SMIR = 8187401606
 SELLER_SAKHAR = 8486571400
-SELLER_YURI = 8325915645
-SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR, SELLER_YURI]
+SELLER_OLEG = 8325915645   # Олег
+SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR, SELLER_OLEG]
 
 # ========== ПОДКЛЮЧЕНИЕ К SUPABASE ==========
 SUPABASE_URL = 'https://onngeuzbcjtfswmyukog.supabase.co'
