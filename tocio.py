@@ -17,6 +17,7 @@ API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
 SELLER_SMIR = 8187401606
 SELLER_SAKHAR = 8486571400
 SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR]
+ADMIN_IDS = [SELLER_SMIR]  # Только Smir — главный админ
 
 # ========== ПОДКЛЮЧЕНИЕ К SUPABASE ==========
 SUPABASE_URL = 'https://onngeuzbcjtfswmyukog.supabase.co'
@@ -424,13 +425,11 @@ async def start(message: types.Message):
             "• от 1млн → 90%\n"
             "<i>Отказ от правил = отключение от системы.</i>\n"
             "——————————\n"
-            "<b>Инструкция:</b>\n"
-            "При назначении клиента отправьте его юзернейм @SmirAgent и скриншот в ЛС.\n"
-            "——————————\n"
             "<b>Команды для админов:</b>\n"
             "/assortiment — полный ассортимент\n"
             "/anketa — анкета для заказа\n"
             "/short — краткий ассортимент\n"
+            "/admin — админ-панель (только для Smir)\n"
             "——————————\n"
             "<b>Команда для статистики:</b>\n"
             "/stats — ваша статистика (клиенты, заказы, профит)",
@@ -639,6 +638,54 @@ async def short(message: types.Message):
     )
     await message.answer(text)
 
+# ========== АДМИН-ПАНЕЛЬ (ТОЛЬКО ДЛЯ SMIR) ==========
+@dp.message(Command('admin'))
+async def admin_panel(message: types.Message):
+    user_id = message.from_user.id
+    if user_id not in ADMIN_IDS:
+        await message.answer("<i>У вас нет прав для этой команды.</i>")
+        return
+    
+    # Получаем общую статистику
+    total_clients = 0
+    total_orders = 0
+    total_profit = 0
+    sellers_data = []
+    
+    for seller_id in SELLER_IDS:
+        stats = get_seller_stats(seller_id)
+        seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар"
+        total_clients += stats.get('clients_count', 0)
+        total_orders += stats.get('orders_count', 0)
+        total_profit += stats.get('total_profit', 0)
+        sellers_data.append({
+            'name': seller_name,
+            'clients': stats.get('clients_count', 0),
+            'orders': stats.get('orders_count', 0),
+            'profit': stats.get('total_profit', 0)
+        })
+    
+    # Сортируем продавцов по прибыли
+    sellers_data.sort(key=lambda x: x['profit'], reverse=True)
+    
+    text = (
+        f"<b>АДМИН-ПАНЕЛЬ (общая статистика):</b>\n"
+        f"——————————\n"
+        f"Всего клиентов: <b>{total_clients}</b>\n"
+        f"Всего заказов: <b>{total_orders}</b>\n"
+        f"Общий профит: <b>{total_profit:,} руб.</b>\n"
+        f"——————————\n"
+        f"<b>Топ продавцов:</b>\n"
+    )
+    
+    for i, seller in enumerate(sellers_data, 1):
+        text += f"{i}. {seller['name']} — {seller['profit']:,} руб. (заказов: {seller['orders']}, клиентов: {seller['clients']})\n"
+    
+    text += "——————————\n"
+    text += f"<i>Ваша доля (30% от общего профита): {int(total_profit * 0.3):,} руб.</i>"
+    
+    await message.answer(text)
+
 @dp.callback_query(lambda cb: cb.data.startswith('assign_'))
 async def assign_seller(callback: types.CallbackQuery):
     parts = callback.data.split('_')
@@ -661,6 +708,16 @@ async def assign_seller(callback: types.CallbackQuery):
         username = f"@{chat.username}" if chat.username else "Нет юзернейма"
     except:
         username = "Неизвестно"
+    
+    # Уведомление админу (Smir)
+    for admin_id in ADMIN_IDS:
+        await bot.send_message(
+            admin_id,
+            f"<b>👤 Клиент назначен!</b>\n"
+            f"Клиент: {user_id} ({username})\n"
+            f"Продавец: {seller_name}"
+        )
+    
     await bot.send_message(
         seller_id,
         f"<b>Новый клиент назначен вам.</b>\n"
@@ -813,6 +870,15 @@ async def handle_user_message(message: types.Message):
             f"<b>Правило:</b> Твой процент — {get_worker_percentage(get_seller_stats(seller).get('total_profit', 0))}%.",
             reply_markup=reply_kb
         )
+        # Уведомление админу
+        for admin_id in ADMIN_IDS:
+            await bot.send_message(
+                admin_id,
+                f"<b>💬 Сообщение от клиента</b>\n"
+                f"Клиент: {user_id}\n"
+                f"Продавец: {get_seller_stats(seller).get('seller_id', seller)}\n"
+                f"Текст: {text[:50]}..."
+            )
         await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
         return
     if user_id in user_forms:
@@ -869,6 +935,15 @@ async def handle_user_message(message: types.Message):
                 ])
                 try:
                     await bot.send_message(seller, order_text, reply_markup=confirm_kb)
+                    # Уведомление админу
+                    for admin_id in ADMIN_IDS:
+                        await bot.send_message(
+                            admin_id,
+                            f"<b>📦 Новый заказ!</b>\n"
+                            f"Клиент: {user_id} ({username})\n"
+                            f"Сумма: {order_total:,} руб.\n"
+                            f"Продавец: {seller}"
+                        )
                     await message.answer(
                         "<b>Заказ успешно отправлен.</b>\n"
                         "Ожидайте подтверждения."
@@ -912,6 +987,15 @@ async def handle_order_decision(callback: types.CallbackQuery):
             f"Свяжитесь с ним для дальнейших инструкций:\n"
             f"{contact}"
         )
+        # Уведомление админу
+        for admin_id in ADMIN_IDS:
+            await bot.send_message(
+                admin_id,
+                f"<b>✅ Заказ подтверждён!</b>\n"
+                f"Заказ ID: {order_id}\n"
+                f"Клиент: {client_id}\n"
+                f"Продавец: {seller_id}"
+            )
         await callback.message.edit_text(
             callback.message.text + "\n\n✅ Заказ подтверждён."
         )
