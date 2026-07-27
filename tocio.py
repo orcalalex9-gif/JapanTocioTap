@@ -10,7 +10,7 @@ API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
 
 # ========== ПРОДАВЦЫ ==========
 SELLER_SMIR = 8187401606     # Смир
-SELLER_SAKHAR = 8486571400   # Сахар
+SELLER_SAKHAR = 8486571400   # С
 
 SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR]  # Для проверки
 
