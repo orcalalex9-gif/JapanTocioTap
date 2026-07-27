@@ -9,10 +9,9 @@ from aiogram.client.default import DefaultBotProperties
 API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
 
 # ========== ПРОДАВЦЫ ==========
-SELLER_SMIR = 8187401606     # 
-SELLER_SAKHAR = 8486571400   # С
-
-SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR]  # Для проверки
+SELLER_SMIR = 8187401606     # Смир
+SELLER_SAKHAR = 8486571400   # Сахар
+SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR]
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -30,6 +29,7 @@ main_kb = ReplyKeyboardMarkup(
 
 # ========== ТОВАРЫ (ОБЩИЕ ДЛЯ ВСЕХ) ==========
 weapons = {
+    # Оружие
     'barret_m82': {'name': 'Barret M82', 'price': 3500000, 'stock': 1, 'category': 'Оружие'},
     'm4a1': {'name': 'M4A1', 'price': 1500000, 'stock': 12, 'category': 'Оружие'},
     'svd': {'name': 'CВД', 'price': 1500000, 'stock': 3, 'category': 'Оружие'},
@@ -46,32 +46,36 @@ weapons = {
     'obrez': {'name': 'Обpeз', 'price': 80000, 'stock': 25, 'category': 'Оружие'},
     'silencer': {'name': 'Глyшитeль 9x19', 'price': 80000, 'stock': 30, 'category': 'Оружие'},
     'grenade': {'name': 'Гpaнaтa Ф-1', 'price': 12500, 'stock': 120, 'category': 'Оружие'},
+    # Документы
     'digital_scan': {'name': 'Цифровой скан', 'price': 1500, 'stock': None, 'category': 'Документы'},
     'personal_data': {'name': 'Данные личности', 'price': 7000, 'stock': None, 'category': 'Документы'},
     'drivers_license': {'name': 'Права (пластик)', 'price': 52800, 'stock': None, 'category': 'Документы'},
     'passport_rf': {'name': 'Паспорт РФ', 'price': 178000, 'stock': None, 'category': 'Документы'},
     'foreign_passport_no_chip': {'name': 'Зарубежка (без чипа)', 'price': 350000, 'stock': None, 'category': 'Документы'},
     'foreign_passport_chip': {'name': 'Зарубежка (с чипом)', 'price': 950000, 'stock': None, 'category': 'Документы'},
+    # Химия
     'marijuana': {'name': 'Марихуана', 'price': 2000, 'stock': None, 'category': 'Химия'},
     'hashish': {'name': 'Гашиш', 'price': 3000, 'stock': None, 'category': 'Химия'},
     'methamphetamine': {'name': 'Метамфетамин', 'price': 5000, 'stock': None, 'category': 'Химия'},
     'cocaine': {'name': 'Кокаин', 'price': 10000, 'stock': None, 'category': 'Химия'},
+    # Авто-угон
     'simple_signs': {'name': 'Простые знаки', 'price': 10000, 'stock': None, 'category': 'Авто-угон'},
     'elite_duplicates': {'name': 'Элитные дубликаты', 'price': 15000, 'stock': None, 'category': 'Авто-угон'},
     'lockpick_kit': {'name': 'Комплект отмычек и сканер', 'price': 35000, 'stock': 15, 'category': 'Авто-угон'},
     'anti_tracker': {'name': 'Программа-антитрекер', 'price': 70000, 'stock': 8, 'category': 'Авто-угон'},
+    # Связь
     'burner_phone': {'name': 'Одноразовый телефон (Burner Phone)', 'price': 10000, 'stock': 25, 'category': 'Связь'},
     'jammer': {'name': 'Портативная глушилка сигнала', 'price': 120000, 'stock': 5, 'category': 'Связь'},
+    # Услуги
     'sportiki': {'name': 'Спортики (Силовой выезд)', 'price': 150000, 'stock': None, 'category': 'Услуги'},
 }
 
 # ========== БАЗЫ ДАННЫХ ==========
-user_sessions = {}          # chat_mode
+user_sessions = {}          # для чата и режимов ответа
 user_orders = {}            # история заказов
 user_carts = {}             # корзины
 user_forms = {}             # анкеты
 user_seller = {}            # { user_id: seller_id } — к кому привязан клиент
-pending_assignments = {}    # { admin_id: [user_id, ...] } — ожидают назначения
 
 # ========== КЛАВИАТУРЫ ==========
 def get_shop_kb():
@@ -148,7 +152,7 @@ def get_cart_item_text(key: str, user_id: int) -> str:
         f"<i>Используйте кнопки + и - для изменения количества.</i>"
     )
 
-# ========== ФУНКЦИИ ДЛЯ АНКЕТ ==========
+# ========== АНКЕТЫ ==========
 def get_form_template(category: str, items_text: str) -> tuple:
     templates = {
         'Оружие': {
@@ -258,7 +262,7 @@ async def start(message: types.Message):
     user_id = message.from_user.id
     user_carts[user_id] = {}
     
-    # Если это администратор (Смир или Сахар) — не перенаправляем
+    # Если это админ — просто приветствуем
     if user_id in SELLER_IDS:
         await message.answer(
             "<b>Админ-панель.</b>\n"
@@ -299,15 +303,12 @@ async def assign_seller(callback: types.CallbackQuery):
     user_id = int(parts[1])
     seller_id = int(parts[2])
     
-    # Проверяем, что нажал именно администратор
     if callback.from_user.id not in SELLER_IDS:
         await callback.answer("У вас нет прав.", show_alert=True)
         return
     
-    # Назначаем продавца
     user_seller[user_id] = seller_id
     
-    # Отправляем клиенту приветствие от его продавца
     seller_name = "Смир" if seller_id == SELLER_SMIR else "Сахар"
     await bot.send_message(
         user_id,
@@ -317,7 +318,21 @@ async def assign_seller(callback: types.CallbackQuery):
         reply_markup=main_kb
     )
     
-    # Уведомляем админа, что назначение выполнено
+    # Уведомление продавца
+    try:
+        chat = await bot.get_chat(user_id)
+        username = f"@{chat.username}" if chat.username else "Нет юзернейма"
+    except:
+        username = "Неизвестно"
+    
+    await bot.send_message(
+        seller_id,
+        f"<b>🔔 Новый клиент назначен вам!</b>\n"
+        f"ID: {user_id}\n"
+        f"Юзернейм: {username}\n"
+        f"Статус: ожидает действий."
+    )
+    
     await callback.message.edit_text(
         f"✅ Покупатель {user_id} назначен продавцу {seller_name}."
     )
@@ -338,14 +353,12 @@ async def shop(message: types.Message):
 async def view_cart(message: types.Message):
     user_id = message.from_user.id
     cart = user_carts.get(user_id, {})
-    
     if not cart:
         await message.answer(
             "<b>Корзина пуста.</b>\n"
             "<i>Перейдите в магазин и добавьте товары.</i>"
         )
         return
-    
     text = "<b>Ваша корзина:</b>\n"
     text += "——————————\n"
     total = 0
@@ -359,7 +372,6 @@ async def view_cart(message: types.Message):
         text += f"   Цена: {price:,} руб. x {qty} = {subtotal:,} руб.\n"
     text += "——————————\n"
     text += f"<b>Итого: {total:,} руб.</b>"
-    
     await message.answer(text, reply_markup=get_cart_kb(user_id))
 
 @dp.message(lambda msg: msg.text == 'Чaт c пpoдaвцoм')
@@ -379,20 +391,17 @@ async def chat_with_seller(message: types.Message):
 async def my_orders(message: types.Message):
     user_id = message.from_user.id
     orders = user_orders.get(user_id, [])
-    
     if not orders:
         await message.answer(
             "<b>У вас нет заказов.</b>\n"
             "<i>Перейдите в магазин для оформления.</i>"
         )
         return
-    
     text = "<b>Ваши заказы:</b>\n"
     text += "——————————\n"
     for i, order in enumerate(orders, 1):
         text += f"{i}. {order}\n"
     text += "——————————"
-    
     await message.answer(text)
 
 @dp.message(lambda msg: msg.text == 'Koнтaкты')
@@ -401,21 +410,21 @@ async def contacts(message: types.Message):
         "<b>Основной контакт:</b> @SmirAgent"
     )
 
-# ========== ОБРАБОТКА СООБЩЕНИЙ ==========
+# ========== ОБРАБОТКА ЛЮБЫХ СООБЩЕНИЙ ==========
 @dp.message(lambda msg: msg.text and not msg.text.startswith('/'))
 async def handle_user_message(message: types.Message):
     user_id = message.from_user.id
     text = message.text.strip()
     
-    # Если пользователь — администратор (продавец) — пересылаем сообщение его клиенту
+    # Если пользователь — администратор (продавец)
     if user_id in SELLER_IDS:
-        # Проверяем, есть ли у него активный режим ответа
+        # Проверяем, есть ли активный режим ответа клиенту
         if user_id in user_sessions and user_sessions[user_id].startswith('reply_to_'):
             buyer_id = int(user_sessions[user_id].replace('reply_to_', ''))
             try:
                 await bot.send_message(buyer_id, f"<b>Ответ продавца:</b>\n{text}")
                 await message.answer("✅ Сообщение отправлено покупателю.")
-                # После ответа возвращаемся в обычный режим
+                # Возвращаемся в обычный режим админа
                 user_sessions[user_id] = 'admin_mode'
             except:
                 await message.answer("❌ Ошибка отправки. Возможно, покупатель заблокировал бота.")
@@ -431,21 +440,7 @@ async def handle_user_message(message: types.Message):
         await message.answer("<i>Вы ещё не подключены к продавцу. Напишите /start.</i>")
         return
     
-    # Чат с продавцом (клиент пишет продавцу)
-    if user_id in user_sessions and user_sessions[user_id] == 'chat_mode':
-        seller_id = user_seller[user_id]
-        reply_kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Ответить", callback_data=f"reply_{user_id}")]
-        ])
-        await bot.send_message(
-            seller_id,
-            f"<b>Сообщение от покупателя</b> (ID: {user_id}):\n{text}",
-            reply_markup=reply_kb
-        )
-        await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
-        return
-    
-    # АНКЕТА
+    # ===== АНКЕТА (если пользователь в процессе заполнения) =====
     if user_id in user_forms:
         form_data = user_forms[user_id]
         fields = form_data['fields']
@@ -508,27 +503,26 @@ async def handle_user_message(message: types.Message):
         await message.answer(next_prompt)
         return
     
+    # ===== ЧАТ С ПРОДАВЦОМ (клиент пишет) =====
+    if user_id in user_sessions and user_sessions[user_id] == 'chat_mode':
+        seller_id = user_seller[user_id]
+        reply_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Ответить", callback_data=f"reply_{user_id}")]
+        ])
+        await bot.send_message(
+            seller_id,
+            f"<b>Сообщение от покупателя</b> (ID: {user_id}):\n{text}",
+            reply_markup=reply_kb
+        )
+        await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
+        return
+    
+    # Если ничего не подошло
     await message.answer(
         "<i>Используйте кнопки меню для навигации.</i>"
     )
 
-# ========== КОЛБЭКИ ==========
-@dp.callback_query(lambda cb: cb.data.startswith('reply_'))
-async def reply_to_buyer(callback: types.CallbackQuery):
-    buyer_id = int(callback.data.replace('reply_', ''))
-    seller_id = callback.from_user.id
-    
-    if seller_id not in SELLER_IDS:
-        await callback.answer("У вас нет прав.")
-        return
-    
-    user_sessions[seller_id] = f'reply_to_{buyer_id}'
-    await callback.message.answer(
-        f"<b>Ответ покупателю (ID: {buyer_id})</b>\n"
-        "<i>Напишите текст ответа:</i>"
-    )
-    await callback.answer()
-
+# ========== ВЫХОД ИЗ ЧАТА ==========
 @dp.message(Command('exit_chat'))
 async def exit_chat(message: types.Message):
     user_id = message.from_user.id
@@ -537,6 +531,21 @@ async def exit_chat(message: types.Message):
         await message.answer("<b>Вы вышли из чата.</b>", reply_markup=main_kb)
     else:
         await message.answer("<i>Вы не находитесь в чате.</i>")
+
+# ========== КОЛБЭКИ ==========
+@dp.callback_query(lambda cb: cb.data.startswith('reply_'))
+async def reply_to_buyer(callback: types.CallbackQuery):
+    buyer_id = int(callback.data.replace('reply_', ''))
+    seller_id = callback.from_user.id
+    if seller_id not in SELLER_IDS:
+        await callback.answer("У вас нет прав.")
+        return
+    user_sessions[seller_id] = f'reply_to_{buyer_id}'
+    await callback.message.answer(
+        f"<b>Ответ покупателю (ID: {buyer_id})</b>\n"
+        "<i>Напишите текст ответа:</i>"
+    )
+    await callback.answer()
 
 @dp.callback_query(lambda cb: cb.data.startswith('cat_'))
 async def show_category(callback: types.CallbackQuery):
@@ -564,12 +573,10 @@ async def buy_weapon(callback: types.CallbackQuery):
     if not data:
         await callback.answer("Товар не найден")
         return
-    
     name = data['name']
     price = data['price']
     stock = data['stock']
     user_id = callback.from_user.id
-    
     if stock is not None and stock <= 0:
         await callback.message.delete()
         await callback.message.answer(
@@ -579,15 +586,12 @@ async def buy_weapon(callback: types.CallbackQuery):
         )
         await callback.answer()
         return
-    
     action_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Добавить в корзину", callback_data=f"add_cart_{key}")],
         [InlineKeyboardButton(text="Назад в категории", callback_data="back_categories")]
     ])
-    
     stock_text = "∞" if stock is None else stock
     price_text = f"{price:,} руб." if price != 150000 else f"от {price:,} руб."
-    
     await callback.message.delete()
     await callback.message.answer(
         f"<b>{name}</b>\n"
@@ -605,14 +609,11 @@ async def add_to_cart(callback: types.CallbackQuery):
     if not data:
         await callback.answer("Товар не найден")
         return
-    
     user_id = callback.from_user.id
     if user_id not in user_carts:
         user_carts[user_id] = {}
-    
     stock = data['stock']
     current_qty = user_carts[user_id].get(key, {}).get('qty', 0)
-    
     if stock is not None and current_qty >= stock:
         await callback.message.delete()
         await callback.message.answer(
@@ -623,12 +624,10 @@ async def add_to_cart(callback: types.CallbackQuery):
         )
         await callback.answer()
         return
-    
     if key in user_carts[user_id]:
         user_carts[user_id][key]['qty'] += 1
     else:
         user_carts[user_id][key] = {'price': data['price'], 'qty': 1}
-    
     text = get_cart_item_text(key, user_id)
     if text:
         await callback.message.edit_text(
@@ -642,15 +641,12 @@ async def change_cart_quantity(callback: types.CallbackQuery):
     action = callback.data[:3]
     key = callback.data[4:]
     user_id = callback.from_user.id
-    
     cart = user_carts.get(user_id, {})
     if key not in cart:
         await callback.answer("Товар не найден в корзине")
         return
-    
     stock = weapons[key]['stock']
     current_qty = cart[key]['qty']
-    
     if action == 'inc':
         if stock is not None and current_qty >= stock:
             await callback.message.delete()
@@ -677,7 +673,6 @@ async def change_cart_quantity(callback: types.CallbackQuery):
             )
             await callback.answer()
             return
-    
     text = get_cart_item_text(key, user_id)
     if text:
         await callback.message.edit_text(
@@ -696,14 +691,12 @@ async def back_to_cart_callback(callback: types.CallbackQuery):
 async def view_cart(message: types.Message):
     user_id = message.from_user.id if hasattr(message, 'from_user') else message.chat.id
     cart = user_carts.get(user_id, {})
-    
     if not cart:
         await message.answer(
             "<b>Корзина пуста.</b>\n"
             "<i>Перейдите в магазин и добавьте товары.</i>"
         )
         return
-    
     text = "<b>Ваша корзина:</b>\n"
     text += "——————————\n"
     total = 0
@@ -717,31 +710,25 @@ async def view_cart(message: types.Message):
         text += f"   Цена: {price:,} руб. x {qty} = {subtotal:,} руб.\n"
     text += "——————————\n"
     text += f"<b>Итого: {total:,} руб.</b>"
-    
     await message.answer(text, reply_markup=get_cart_kb(user_id))
 
 @dp.callback_query(lambda cb: cb.data == 'checkout')
 async def checkout(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     cart = user_carts.get(user_id, {})
-    
     if not cart:
         await callback.message.answer("<b>Корзина пуста.</b>")
         await callback.answer()
         return
-    
     first_key = list(cart.keys())[0]
     category = weapons[first_key]['category']
-    
     items_list = []
     for key, data in cart.items():
         name = weapons[key]['name']
         qty = data['qty']
         items_list.append(f"{name} x{qty}")
     items_text = ", ".join(items_list)
-    
     form_text, fields, prompts = get_form_template(category, items_text)
-    
     user_forms[user_id] = {
         'items': items_text,
         'category': category,
@@ -750,7 +737,6 @@ async def checkout(callback: types.CallbackQuery):
         'step': 0,
         'cart': cart.copy()
     }
-    
     await callback.message.delete()
     await callback.message.answer(form_text)
     await callback.answer()
