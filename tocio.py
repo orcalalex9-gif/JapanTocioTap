@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from datetime import datetime
+import pytz
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
@@ -8,17 +10,19 @@ from aiogram.client.default import DefaultBotProperties
 
 API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
 
-# ========== ПРОДАВЦЫ ==========
-SELLER_SMIR = 8187401606     # Smir
-SELLER_SAKHAR = 8486571400   # Сахар
-
+SELLER_SMIR = 8187401606
+SELLER_SAKHAR = 8486571400
 SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR]
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# ========== ГЛАВНОЕ МЕНЮ ==========
+def is_working_hours() -> bool:
+    tz = pytz.timezone('Europe/Moscow')
+    now = datetime.now(tz)
+    return 8 <= now.hour < 22
+
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text='Магазин'), KeyboardButton(text='Корзина')],
@@ -28,7 +32,6 @@ main_kb = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# ========== ТОВАРЫ ==========
 weapons = {
     'barret_m82': {'name': 'Barret M82', 'price': 3500000, 'stock': 1, 'category': 'Оружие'},
     'm4a1': {'name': 'M4A1', 'price': 1500000, 'stock': 12, 'category': 'Оружие'},
@@ -65,13 +68,11 @@ weapons = {
     'sportiki': {'name': 'Спортики (Силовой выезд)', 'price': 150000, 'stock': None, 'category': 'Услуги'},
 }
 
-# ========== БАЗЫ ДАННЫХ ==========
 user_sessions = {}
 user_orders = {}
 user_carts = {}
 user_forms = {}
 user_seller = {}
-pending_assignments = {}
 
 # ========== КЛАВИАТУРЫ ==========
 def get_shop_kb():
@@ -158,7 +159,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 f"Товар и количество: {items_text}\n"
                 "——————————\n"
                 "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-                "<b>Укажите удобный вам город / регион / район:</b>"
+                "<b>Укажите регион / район:</b>"
             ),
             'fields': ['region', 'hideout', 'time', 'payment'],
             'prompts': [
@@ -191,7 +192,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 f"Товар и количество: {items_text}\n"
                 "——————————\n"
                 "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-                "<b>Укажите удобный вам город / регион / район:</b>"
+                "<b>Укажите регион / район:</b>"
             ),
             'fields': ['region', 'hideout', 'time', 'payment'],
             'prompts': [
@@ -207,7 +208,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 f"Товар и количество: {items_text}\n"
                 "——————————\n"
                 "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-                "<b>Укажите удобный вам город / регион / район:</b>"
+                "<b>Укажите регион / район:</b>"
             ),
             'fields': ['region', 'car_brand', 'car_year', 'payment'],
             'prompts': [
@@ -223,7 +224,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 f"Товар и количество: {items_text}\n"
                 "——————————\n"
                 "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-                "<b>Укажите удобный вам город / регион / район:</b>"
+                "<b>Укажите регион / район:</b>"
             ),
             'fields': ['region', 'extra', 'payment'],
             'prompts': [
@@ -238,7 +239,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 f"Услуга: {items_text}\n"
                 "——————————\n"
                 "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-                "<b>Укажите удобный вам город / регион / район:</b>"
+                "<b>Укажите регион / район:</b>"
             ),
             'fields': ['region', 'target_name', 'target_address', 'task_desc', 'payment'],
             'prompts': [
@@ -252,7 +253,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
     template = templates.get(category, templates['Оружие'])
     return template['text'], template['fields'], template['prompts']
 
-# ========== ОБРАБОТЧИКИ СООБЩЕНИЙ ==========
+# ========== ОБРАБОТЧИКИ ==========
 @dp.message(Command('start'))
 async def start(message: types.Message):
     user_id = message.from_user.id
@@ -261,8 +262,20 @@ async def start(message: types.Message):
     if user_id in SELLER_IDS:
         await message.answer(
             "<b>Панель управления.</b>\n"
-            "<i>Вы продавец. Используйте магазин для тестов.</i>",
+            "<i>Вы продавец. Используйте магазин для тестов.</i>\n"
+            "——————————\n"
+            "<b>Правило системы:</b>\n"
+            "30% — создателю\n"
+            "70% — вам (воркеру)\n"
+            "<i>Отказ от правила = отключение от системы.</i>",
             reply_markup=main_kb
+        )
+        return
+    
+    if not is_working_hours():
+        await message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
         )
         return
     
@@ -320,7 +333,9 @@ async def assign_seller(callback: types.CallbackQuery):
         seller_id,
         f"<b>Новый клиент назначен вам.</b>\n"
         f"ID: {user_id}\n"
-        f"Юзернейм: {username}"
+        f"Юзернейм: {username}\n"
+        "——————————\n"
+        "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение."
     )
     
     await callback.message.edit_text(
@@ -334,6 +349,12 @@ async def shop(message: types.Message):
     if user_id not in user_seller and user_id not in SELLER_IDS:
         await message.answer("<i>Вы ещё не подключены к продавцу. Напишите /start.</i>")
         return
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        return
     await message.answer(
         "<b>Выберите категорию:</b>",
         reply_markup=get_shop_kb()
@@ -342,6 +363,12 @@ async def shop(message: types.Message):
 @dp.message(lambda msg: msg.text == 'Корзина')
 async def view_cart(message: types.Message):
     user_id = message.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        return
     cart = user_carts.get(user_id, {})
     
     if not cart:
@@ -373,6 +400,12 @@ async def chat_with_seller(message: types.Message):
     if user_id not in user_seller:
         await message.answer("<i>Вы ещё не подключены к продавцу. Напишите /start.</i>")
         return
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        return
     user_sessions[user_id] = 'chat_mode'
     await message.answer(
         "<b>Вы в чате с продавцом.</b>\n"
@@ -383,6 +416,12 @@ async def chat_with_seller(message: types.Message):
 @dp.message(lambda msg: msg.text == 'Мои заказы')
 async def my_orders(message: types.Message):
     user_id = message.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        return
     orders = user_orders.get(user_id, [])
     
     if not orders:
@@ -412,7 +451,6 @@ async def handle_user_message(message: types.Message):
     user_id = message.from_user.id
     text = message.text.strip()
     
-    # Если пользователь — продавец
     if user_id in SELLER_IDS:
         if user_id in user_sessions and user_sessions[user_id].startswith('reply_to_'):
             buyer_id = int(user_sessions[user_id].replace('reply_to_', ''))
@@ -433,7 +471,13 @@ async def handle_user_message(message: types.Message):
         await message.answer("<i>Вы ещё не подключены к продавцу. Напишите /start.</i>")
         return
     
-    # Чат с продавцом
+    if not is_working_hours():
+        await message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        return
+    
     if user_id in user_sessions and user_sessions[user_id] == 'chat_mode':
         seller_id = user_seller[user_id]
         reply_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -441,13 +485,14 @@ async def handle_user_message(message: types.Message):
         ])
         await bot.send_message(
             seller_id,
-            f"<b>Сообщение от покупателя</b> (ID: {user_id}):\n{text}",
+            f"<b>Сообщение от покупателя</b> (ID: {user_id}):\n{text}\n"
+            "——————————\n"
+            "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.",
             reply_markup=reply_kb
         )
         await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
         return
     
-    # АНКЕТА
     if user_id in user_forms:
         form_data = user_forms[user_id]
         fields = form_data['fields']
@@ -488,7 +533,9 @@ async def handle_user_message(message: types.Message):
                 f"——————————\n"
                 + "\n".join(order_lines) +
                 f"\n——————————\n"
-                f"Покупатель: {user_id} ({username})"
+                f"Покупатель: {user_id} ({username})\n"
+                "——————————\n"
+                "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение."
             )
             
             seller_id = user_seller[user_id]
@@ -540,9 +587,17 @@ async def exit_chat(message: types.Message):
     else:
         await message.answer("<i>Вы не находитесь в чате.</i>")
 
-# ========== КОЛБЭКИ ==========
+# ========== ОСТАЛЬНЫЕ КОЛБЭКИ ==========
 @dp.callback_query(lambda cb: cb.data.startswith('cat_'))
 async def show_category(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await callback.message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        await callback.answer()
+        return
     category = callback.data.replace('cat_', '')
     await callback.message.delete()
     await callback.message.answer(
@@ -553,6 +608,14 @@ async def show_category(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data == 'back_categories')
 async def back_categories(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await callback.message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        await callback.answer()
+        return
     await callback.message.delete()
     await callback.message.answer(
         "<b>Выберите категорию:</b>",
@@ -562,6 +625,14 @@ async def back_categories(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data.startswith('buy_'))
 async def buy_weapon(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await callback.message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        await callback.answer()
+        return
     key = callback.data.replace('buy_', '')
     data = weapons.get(key)
     if not data:
@@ -571,7 +642,6 @@ async def buy_weapon(callback: types.CallbackQuery):
     name = data['name']
     price = data['price']
     stock = data['stock']
-    user_id = callback.from_user.id
     
     if stock is not None and stock <= 0:
         await callback.message.delete()
@@ -603,13 +673,20 @@ async def buy_weapon(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data.startswith('add_cart_'))
 async def add_to_cart(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await callback.message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        await callback.answer()
+        return
     key = callback.data.replace('add_cart_', '')
     data = weapons.get(key)
     if not data:
         await callback.answer("Товар не найден")
         return
     
-    user_id = callback.from_user.id
     if user_id not in user_carts:
         user_carts[user_id] = {}
     
@@ -642,9 +719,16 @@ async def add_to_cart(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data.startswith('inc_') or cb.data.startswith('dec_'))
 async def change_cart_quantity(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await callback.message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        await callback.answer()
+        return
     action = callback.data[:3]
     key = callback.data[4:]
-    user_id = callback.from_user.id
     
     cart = user_carts.get(user_id, {})
     if key not in cart:
@@ -692,6 +776,13 @@ async def change_cart_quantity(callback: types.CallbackQuery):
 @dp.callback_query(lambda cb: cb.data == 'back_to_cart')
 async def back_to_cart_callback(callback: types.CallbackQuery):
     user_id = callback.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await callback.message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        await callback.answer()
+        return
     await callback.message.delete()
     await view_cart(callback.message)
     await callback.answer()
@@ -726,6 +817,13 @@ async def view_cart(message: types.Message):
 @dp.callback_query(lambda cb: cb.data == 'checkout')
 async def checkout(callback: types.CallbackQuery):
     user_id = callback.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await callback.message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        await callback.answer()
+        return
     cart = user_carts.get(user_id, {})
     
     if not cart:
@@ -761,6 +859,13 @@ async def checkout(callback: types.CallbackQuery):
 @dp.callback_query(lambda cb: cb.data == 'clear_cart')
 async def clear_cart(callback: types.CallbackQuery):
     user_id = callback.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await callback.message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        await callback.answer()
+        return
     user_carts[user_id] = {}
     await callback.message.delete()
     await callback.message.answer("<b>Корзина очищена.</b>")
@@ -768,6 +873,14 @@ async def clear_cart(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data == 'back_shop')
 async def back_shop(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await callback.message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        await callback.answer()
+        return
     await callback.message.delete()
     await callback.message.answer(
         "<b>Выберите категорию:</b>",
@@ -777,6 +890,14 @@ async def back_shop(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda cb: cb.data == 'back_main')
 async def back_main(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if user_id not in SELLER_IDS and not is_working_hours():
+        await callback.message.answer(
+            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<i>Напишите позже.</i>"
+        )
+        await callback.answer()
+        return
     await callback.message.delete()
     await callback.message.answer("<b>Возврат в главное меню.</b>", reply_markup=main_kb)
     await callback.answer()
