@@ -20,7 +20,7 @@ SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR, SELLER_YURI]
 
 # ========== ПОДКЛЮЧЕНИЕ К SUPABASE ==========
 SUPABASE_URL = 'https://onngeuzbcjtfswmyukog.supabase.co'
-SUPABASE_KEY = 'СЮДА_НОВЫЙ_КЛЮЧ'  # ЗАМЕНИ НА СВОЙ (НОВЫЙ!)
+SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ubmdldXpiY2p0ZnN3bXl1a29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNDQyMTYsImV4cCI6MjEwMDcyMDIxNn0.RPDpxj2z9B9fw2efwYttYuu-SutSFt5p0CFRmCW7znI'  # ЗАМЕНИ НА СВОЙ (НОВЫЙ!)
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     logging.error("SUPABASE_URL или SUPABASE_KEY не заданы!")
