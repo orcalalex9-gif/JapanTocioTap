@@ -27,7 +27,6 @@ main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text='Магазин'), KeyboardButton(text='Корзина')],
         [KeyboardButton(text='Чат с продавцом'), KeyboardButton(text='Мои заказы')],
-        [KeyboardButton(text='Контакты')]
     ],
     resize_keyboard=True
 )
