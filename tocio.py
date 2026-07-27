@@ -158,7 +158,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 f"Товар и количество: {items_text}\n"
                 "——————————\n"
                 "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-                "<b>Укажите регион / район:</b>"
+                "<b>Укажите удобный вам город / регион / район:</b>"
             ),
             'fields': ['region', 'hideout', 'time', 'payment'],
             'prompts': [
@@ -191,7 +191,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 f"Товар и количество: {items_text}\n"
                 "——————————\n"
                 "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-                "<b>Укажите регион / район:</b>"
+                "<b>Укажите удобный вам город / регион / район:</b>"
             ),
             'fields': ['region', 'hideout', 'time', 'payment'],
             'prompts': [
@@ -207,7 +207,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 f"Товар и количество: {items_text}\n"
                 "——————————\n"
                 "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-                "<b>Укажите регион / район:</b>"
+                "<b>Укажите удобный вам город / регион / район:</b>"
             ),
             'fields': ['region', 'car_brand', 'car_year', 'payment'],
             'prompts': [
@@ -223,7 +223,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 f"Товар и количество: {items_text}\n"
                 "——————————\n"
                 "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-                "<b>Укажите регион / район:</b>"
+                "<b>Укажите удобный вам город / регион / район:</b>"
             ),
             'fields': ['region', 'extra', 'payment'],
             'prompts': [
@@ -238,7 +238,7 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 f"Услуга: {items_text}\n"
                 "——————————\n"
                 "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
-                "<b>Укажите регион / район:</b>"
+                "<b>Укажите удобный вам город / регион / район:</b>"
             ),
             'fields': ['region', 'target_name', 'target_address', 'task_desc', 'payment'],
             'prompts': [
