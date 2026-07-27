@@ -362,6 +362,7 @@ async def start(message: types.Message):
     
     save_user(user_id, message.from_user.username)
     
+    # Если пользователь — продавец
     if user_id in SELLER_IDS:
         await message.answer(
             "<b>Панель управления.</b>\n"
@@ -392,6 +393,21 @@ async def start(message: types.Message):
         )
         return
     
+    # ===== ПРОВЕРКА: ЕСТЬ ЛИ КЛИЕНТ УЖЕ В СИСТЕМЕ =====
+    existing_seller = get_seller_for_user(user_id)
+    
+    if existing_seller is not None:
+        # Клиент уже назначен продавцу → просто приветствуем
+        seller_name = "Smir" if existing_seller == SELLER_SMIR else "Сахар"
+        await message.answer(
+            f"<b>Добро пожаловать.</b>\n"
+            f"<i>Ваш продавец — {seller_name}.</i>\n"
+            "Выберите действие:",
+            reply_markup=main_kb
+        )
+        return
+    
+    # ===== НОВЫЙ КЛИЕНТ: ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНАМ =====
     username = f"@{message.from_user.username}" if message.from_user.username else "Нет юзернейма"
     
     for admin_id in SELLER_IDS:
