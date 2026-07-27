@@ -15,8 +15,7 @@ API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
 # ========== ПРОДАВЦЫ ==========
 SELLER_SMIR = 8187401606
 SELLER_SAKHAR = 8486571400
-SELLER_OLEG = 8325915645   # Олег
-SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR, SELLER_OLEG]
+SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR]
 
 # ========== ПОДКЛЮЧЕНИЕ К SUPABASE ==========
 SUPABASE_URL = 'https://onngeuzbcjtfswmyukog.supabase.co'
@@ -399,8 +398,7 @@ async def start(message: types.Message):
         try:
             assign_kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Назначить Smir", callback_data=f"assign_{user_id}_{SELLER_SMIR}")],
-                [InlineKeyboardButton(text="Назначить Сахар", callback_data=f"assign_{user_id}_{SELLER_SAKHAR}")],
-                [InlineKeyboardButton(text="Назначить Олег", callback_data=f"assign_{user_id}_{SELLER_OLEG}")]
+                [InlineKeyboardButton(text="Назначить Сахар", callback_data=f"assign_{user_id}_{SELLER_SAKHAR}")]
             ])
             await bot.send_message(
                 admin_id,
@@ -434,7 +432,7 @@ async def show_stats(message: types.Message):
     worker_percent = get_worker_percentage(total_sum)
     creator_percent = 100 - worker_percent
     
-    seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар" if user_id == SELLER_SAKHAR else "Олег"
+    seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар"
     
     next_levels = [
         (80000, 75, "80 000"),
@@ -479,7 +477,7 @@ async def assign_seller(callback: types.CallbackQuery):
     
     assign_user_to_seller(user_id, seller_id)
     
-    seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар" if seller_id == SELLER_SAKHAR else "Олег"
+    seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар"
     await bot.send_message(
         user_id,
         f"<b>Добро пожаловать.</b>\n"
