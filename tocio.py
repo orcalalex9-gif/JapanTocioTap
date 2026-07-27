@@ -15,12 +15,12 @@ API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
 # ========== ПРОДАВЦЫ ==========
 SELLER_SMIR = 8187401606
 SELLER_SAKHAR = 8486571400
-SELLER_YURI = 8325915645   # Юрий
+SELLER_YURI = 8325915645
 SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR, SELLER_YURI]
 
 # ========== ПОДКЛЮЧЕНИЕ К SUPABASE ==========
 SUPABASE_URL = 'https://onngeuzbcjtfswmyukog.supabase.co'
-SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ubmdldXpiY2p0ZnN3bXl1a29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNDQyMTYsImV4cCI6MjEwMDcyMDIxNn0.RPDpxj2z9B9fw2efwYttYuu-SutSFt5p0CFRmCW7znI'  # ЗАМЕНИ НА СВОЙ (НОВЫЙ!)
+SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ubmdldXpiY2p0ZnN3bXl1a29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNDQyMTYsImV4cCI6MjEwMDcyMDIxNn0.RPDpxj2z9B9fw2efwYttYuu-SutSFt5p0CFRmCW7znI'
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     logging.error("SUPABASE_URL или SUPABASE_KEY не заданы!")
@@ -85,7 +85,6 @@ user_sessions = {}
 user_carts = {}
 user_forms = {}
 
-# ========== ФУНКЦИИ РАБОТЫ С БД ==========
 def save_user(user_id: int, username: str = None):
     try:
         supabase.table('users').upsert({'id': user_id, 'username': username}).execute()
@@ -180,7 +179,6 @@ def get_seller_for_user(user_id: int) -> int:
     except:
         return None
 
-# ========== КЛАВИАТУРЫ ==========
 def get_shop_kb():
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Оружие", callback_data="cat_Оружие")],
@@ -358,7 +356,6 @@ def get_form_template(category: str, items_text: str) -> tuple:
     template = templates.get(category, templates['Оружие'])
     return template['text'], template['fields'], template['prompts']
 
-# ========== ОБРАБОТЧИКИ ==========
 @dp.message(Command('start'))
 async def start(message: types.Message):
     user_id = message.from_user.id
@@ -397,6 +394,8 @@ async def start(message: types.Message):
         return
     
     username = f"@{message.from_user.username}" if message.from_user.username else "Нет юзернейма"
+    
+    # Отправляем уведомление ВСЕМ продавцам с тремя кнопками
     for admin_id in SELLER_IDS:
         try:
             assign_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -412,8 +411,8 @@ async def start(message: types.Message):
                 f"Нажмите кнопку, чтобы назначить продавца:",
                 reply_markup=assign_kb
             )
-        except:
-            pass
+        except Exception as e:
+            logging.error(f"Ошибка отправки уведомления продавцу {admin_id}: {e}")
     
     await message.answer(
         "<b>Добро пожаловать.</b>\n"
@@ -438,7 +437,6 @@ async def show_stats(message: types.Message):
     
     seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар" if user_id == SELLER_SAKHAR else "Юрий"
     
-    # Определяем следующий уровень
     next_levels = [
         (80000, 75, "80 000"),
         (200000, 80, "200 000"),
@@ -616,7 +614,6 @@ async def my_orders(message: types.Message):
     
     await message.answer(text)
 
-# ========== ОБРАБОТКА СООБЩЕНИЙ ==========
 @dp.message(lambda msg: msg.text and not msg.text.startswith('/'))
 async def handle_user_message(message: types.Message):
     user_id = message.from_user.id
@@ -744,7 +741,6 @@ async def handle_user_message(message: types.Message):
         "<i>Используйте кнопки меню для навигации.</i>"
     )
 
-# ========== ОБРАБОТКА ПОДТВЕРЖДЕНИЯ/ОТКАЗА ==========
 @dp.callback_query(lambda cb: cb.data.startswith('approve_') or cb.data.startswith('reject_'))
 async def handle_order_decision(callback: types.CallbackQuery):
     action, order_id, client_id = callback.data.split('_')
@@ -818,7 +814,6 @@ async def exit_chat(message: types.Message):
     else:
         await message.answer("<i>Вы не находитесь в чате.</i>")
 
-# ========== ОСТАЛЬНЫЕ КОЛБЭКИ ==========
 @dp.callback_query(lambda cb: cb.data.startswith('cat_'))
 async def show_category(callback: types.CallbackQuery):
     user_id = callback.from_user.id
@@ -1133,7 +1128,6 @@ async def back_main(callback: types.CallbackQuery):
     await callback.message.answer("<b>Возврат в главное меню.</b>", reply_markup=main_kb)
     await callback.answer()
 
-# ========== ЗАПУСК ==========
 async def main():
     await dp.start_polling(bot)
 
