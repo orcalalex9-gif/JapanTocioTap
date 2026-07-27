@@ -12,13 +12,15 @@ from supabase import create_client, Client
 
 API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
 
+# ========== ПРОДАВЦЫ ==========
 SELLER_SMIR = 8187401606
 SELLER_SAKHAR = 8486571400
-SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR]
+SELLER_YURI = 8325915645   # Юрий
+SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR, SELLER_YURI]
 
 # ========== ПОДКЛЮЧЕНИЕ К SUPABASE ==========
 SUPABASE_URL = 'https://onngeuzbcjtfswmyukog.supabase.co'
-SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ubmdldXpiY2p0ZnN3bXl1a29nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNDQyMTYsImV4cCI6MjEwMDcyMDIxNn0.RPDpxj2z9B9fw2efwYttYuu-SutSFt5p0CFRmCW7znI'  # ЗАМЕНИ НА СВОЙ (НОВЫЙ!)
+SUPABASE_KEY = 'СЮДА_НОВЫЙ_КЛЮЧ'  # ЗАМЕНИ НА СВОЙ (НОВЫЙ!)
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     logging.error("SUPABASE_URL или SUPABASE_KEY не заданы!")
@@ -100,17 +102,46 @@ def assign_user_to_seller(user_id: int, seller_id: int):
     except Exception as e:
         logging.error(f"Ошибка назначения продавца: {e}")
 
+def get_worker_percentage(profit: int) -> int:
+    if profit < 80000:
+        return 70
+    elif profit < 200000:
+        return 75
+    elif profit < 500000:
+        return 80
+    elif profit < 1000000:
+        return 85
+    else:
+        return 90
+
 def save_order(client_id: int, seller_id: int, items: str, category: str, total: int):
     try:
+        stats = get_seller_stats(seller_id)
+        current_profit = stats.get('total_profit', 0)
+        worker_percent = get_worker_percentage(current_profit)
+        creator_percent = 100 - worker_percent
+        
+        worker_amount = int(total * worker_percent / 100)
+        creator_amount = int(total * creator_percent / 100)
+        
         result = supabase.table('orders').insert({
             'client_id': client_id,
             'seller_id': seller_id,
             'items': items,
             'category': category,
             'total': total,
-            'status': 'pending'
+            'status': 'pending',
+            'worker_percent': worker_percent,
+            'creator_percent': creator_percent,
+            'worker_amount': worker_amount,
+            'creator_amount': creator_amount
         }).execute()
-        # Возвращаем ID созданного заказа
+        
+        supabase.rpc('increment_orders', {
+            'seller_id': seller_id, 
+            'profit': total
+        }).execute()
+        
         if result.data and len(result.data) > 0:
             return result.data[0]['id']
         return None
@@ -341,9 +372,13 @@ async def start(message: types.Message):
             "<i>Вы продавец. Используйте магазин для тестов.</i>\n"
             "——————————\n"
             "<b>Правило системы:</b>\n"
-            "30% — создателю\n"
-            "70% — вам (воркеру)\n"
-            "<i>Отказ от правила = отключение от системы.</i>\n"
+            "Процент воркера зависит от профита:\n"
+            "• до 80к → 70%\n"
+            "• 80–200к → 75%\n"
+            "• 200–500к → 80%\n"
+            "• 500к–1млн → 85%\n"
+            "• от 1млн → 90%\n"
+            "<i>Отказ от правил = отключение от системы.</i>\n"
             "——————————\n"
             "<b>Инструкция:</b>\n"
             "При назначении клиента отправьте его юзернейм @SmirAgent и скриншот в ЛС.\n"
@@ -366,7 +401,8 @@ async def start(message: types.Message):
         try:
             assign_kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Назначить Smir", callback_data=f"assign_{user_id}_{SELLER_SMIR}")],
-                [InlineKeyboardButton(text="Назначить Сахар", callback_data=f"assign_{user_id}_{SELLER_SAKHAR}")]
+                [InlineKeyboardButton(text="Назначить Сахар", callback_data=f"assign_{user_id}_{SELLER_SAKHAR}")],
+                [InlineKeyboardButton(text="Назначить Юрий", callback_data=f"assign_{user_id}_{SELLER_YURI}")]
             ])
             await bot.send_message(
                 admin_id,
@@ -397,7 +433,26 @@ async def show_stats(message: types.Message):
     orders_count = stats.get('orders_count', 0)
     total_sum = stats.get('total_profit', 0)
     
-    seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар"
+    worker_percent = get_worker_percentage(total_sum)
+    creator_percent = 100 - worker_percent
+    
+    seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар" if user_id == SELLER_SAKHAR else "Юрий"
+    
+    # Определяем следующий уровень
+    next_levels = [
+        (80000, 75, "80 000"),
+        (200000, 80, "200 000"),
+        (500000, 85, "500 000"),
+        (1000000, 90, "1 000 000")
+    ]
+    next_text = ""
+    for threshold, percent, label in next_levels:
+        if total_sum < threshold:
+            need = threshold - total_sum
+            next_text = f"Следующий уровень: {percent}% при профите {label} руб.\nОсталось заработать: {need:,} руб."
+            break
+    if not next_text:
+        next_text = "Вы достигли максимального уровня (90%)!"
     
     text = (
         f"<b>Статистика продавца {seller_name}:</b>\n"
@@ -406,8 +461,11 @@ async def show_stats(message: types.Message):
         f"Заказов выполнено: <b>{orders_count}</b>\n"
         f"Общий профит: <b>{total_sum:,} руб.</b>\n"
         f"——————————\n"
-        f"<i>Ваша доля (70%): {int(total_sum * 0.7):,} руб.</i>\n"
-        f"<i>Доля создателя (30%): {int(total_sum * 0.3):,} руб.</i>"
+        f"Текущая доля воркера: <b>{worker_percent}%</b>\n"
+        f"Ваша доля ({worker_percent}%): <b>{int(total_sum * worker_percent / 100):,} руб.</b>\n"
+        f"Доля создателя ({creator_percent}%): <b>{int(total_sum * creator_percent / 100):,} руб.</b>\n"
+        f"——————————\n"
+        f"{next_text}"
     )
     
     await message.answer(text)
@@ -424,7 +482,7 @@ async def assign_seller(callback: types.CallbackQuery):
     
     assign_user_to_seller(user_id, seller_id)
     
-    seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар"
+    seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар" if seller_id == SELLER_SAKHAR else "Юрий"
     await bot.send_message(
         user_id,
         f"<b>Добро пожаловать.</b>\n"
@@ -445,7 +503,8 @@ async def assign_seller(callback: types.CallbackQuery):
         f"ID: {user_id}\n"
         f"Юзернейм: {username}\n"
         "——————————\n"
-        "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение."
+        f"Текущая доля: {get_worker_percentage(get_seller_stats(seller_id).get('total_profit', 0))}%.\n"
+        "Чем больше заказов, тем выше твой процент."
     )
     
     await callback.message.edit_text(
@@ -599,7 +658,7 @@ async def handle_user_message(message: types.Message):
             seller,
             f"<b>Сообщение от покупателя</b> (ID: {user_id}):\n{text}\n"
             "——————————\n"
-            "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.",
+            f"<b>Правило:</b> Твой процент — {get_worker_percentage(get_seller_stats(seller).get('total_profit', 0))}%.",
             reply_markup=reply_kb
         )
         await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
@@ -653,14 +712,12 @@ async def handle_user_message(message: types.Message):
                 f"Покупатель: {user_id} ({username})\n"
                 f"Сумма заказа: <b>{order_total:,} руб.</b>\n"
                 "——————————\n"
-                "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение."
+                f"<b>Правило:</b> Твой процент — {get_worker_percentage(get_seller_stats(seller).get('total_profit', 0))}%."
             )
             
-            # Сохраняем заказ и получаем его ID
             order_id = save_order(user_id, seller, items_text, category, order_total)
             
             if order_id:
-                # Добавляем кнопки подтверждения/отказа
                 confirm_kb = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"approve_{order_id}_{user_id}")],
                     [InlineKeyboardButton(text="❌ Отказать", callback_data=f"reject_{order_id}_{user_id}")]
@@ -699,17 +756,14 @@ async def handle_order_decision(callback: types.CallbackQuery):
         await callback.answer("У вас нет прав.", show_alert=True)
         return
     
-    # Получаем продавца клиента
     client_seller = get_seller_for_user(client_id)
     if client_seller != seller_id:
         await callback.answer("Это не ваш клиент.", show_alert=True)
         return
     
     if action == 'approve':
-        # Подтверждаем заказ
         update_order_status(order_id, 'approved')
         
-        # Определяем контакт продавца
         if seller_id == SELLER_SMIR:
             contact = "@SmirAgent"
         else:
@@ -727,7 +781,6 @@ async def handle_order_decision(callback: types.CallbackQuery):
         await callback.answer("Заказ подтверждён.")
         
     elif action == 'reject':
-        # Отказываем заказ
         update_order_status(order_id, 'rejected')
         
         await bot.send_message(
@@ -765,7 +818,7 @@ async def exit_chat(message: types.Message):
     else:
         await message.answer("<i>Вы не находитесь в чате.</i>")
 
-# ========== ОСТАЛЬНЫЕ КОЛБЭКИ (без изменений) ==========
+# ========== ОСТАЛЬНЫЕ КОЛБЭКИ ==========
 @dp.callback_query(lambda cb: cb.data.startswith('cat_'))
 async def show_category(callback: types.CallbackQuery):
     user_id = callback.from_user.id
