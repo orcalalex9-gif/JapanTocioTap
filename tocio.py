@@ -266,7 +266,11 @@ async def start(message: types.Message):
             "<b>Правило системы:</b>\n"
             "30% — создателю\n"
             "70% — вам (воркеру)\n"
-            "<i>Отказ от правила = отключение от системы.</i>",
+            "<i>Отказ от правила = отключение от системы.</i>\n"
+            "——————————\n"
+            "<b>Инструкция для продавца:</b>\n"
+            "При назначении нового клиента обязательно отправьте его юзернейм (@SmirAgent) и скриншот в личные сообщения для подтверждения.\n"
+            "<i>Это обязательное условие работы в системе.</i>",
             reply_markup=main_kb
         )
         return
@@ -334,7 +338,10 @@ async def assign_seller(callback: types.CallbackQuery):
         f"ID: {user_id}\n"
         f"Юзернейм: {username}\n"
         "——————————\n"
-        "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение."
+        "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.\n"
+        "——————————\n"
+        "<b>Инструкция:</b>\n"
+        "Отправьте юзернейм клиента @SmirAgent и скриншот в ЛС для подтверждения."
     )
     
     await callback.message.edit_text(
@@ -438,12 +445,6 @@ async def my_orders(message: types.Message):
     
     await message.answer(text)
 
-@dp.message(lambda msg: msg.text == 'Контакты')
-async def contacts(message: types.Message):
-    await message.answer(
-        "<b>Основной контакт:</b> @SmirAgent"
-    )
-
 # ========== ОБРАБОТКА СООБЩЕНИЙ ==========
 @dp.message(lambda msg: msg.text and not msg.text.startswith('/'))
 async def handle_user_message(message: types.Message):
@@ -486,7 +487,10 @@ async def handle_user_message(message: types.Message):
             seller_id,
             f"<b>Сообщение от покупателя</b> (ID: {user_id}):\n{text}\n"
             "——————————\n"
-            "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.",
+            "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.\n"
+            "——————————\n"
+            "<b>Инструкция:</b>\n"
+            "Отправьте юзернейм клиента @SmirAgent и скриншот в ЛС для подтверждения.",
             reply_markup=reply_kb
         )
         await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
@@ -534,7 +538,10 @@ async def handle_user_message(message: types.Message):
                 f"\n——————————\n"
                 f"Покупатель: {user_id} ({username})\n"
                 "——————————\n"
-                "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение."
+                "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.\n"
+                "——————————\n"
+                "<b>Инструкция:</b>\n"
+                "Отправьте юзернейм клиента @SmirAgent и скриншот в ЛС для подтверждения."
             )
             
             seller_id = user_seller[user_id]
