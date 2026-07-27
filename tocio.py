@@ -73,6 +73,9 @@ user_carts = {}
 user_forms = {}
 user_seller = {}
 
+# ========== СТАТИСТИКА ДЛЯ ПРОДАВЦОВ ==========
+seller_stats = {}  # {seller_id: {'clients': [], 'orders': [], 'total': 0}}
+
 # ========== КЛАВИАТУРЫ ==========
 def get_shop_kb():
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -259,6 +262,10 @@ async def start(message: types.Message):
     user_carts[user_id] = {}
     
     if user_id in SELLER_IDS:
+        # Инициализируем статистику для продавца
+        if user_id not in seller_stats:
+            seller_stats[user_id] = {'clients': [], 'orders': [], 'total': 0}
+        
         await message.answer(
             "<b>Панель управления.</b>\n"
             "<i>Вы продавец. Используйте магазин для тестов.</i>\n"
@@ -268,9 +275,11 @@ async def start(message: types.Message):
             "70% — вам (воркеру)\n"
             "<i>Отказ от правила = отключение от системы.</i>\n"
             "——————————\n"
-            "<b>Инструкция для продавца:</b>\n"
-            "При назначении нового клиента обязательно отправьте его юзернейм (@SmirAgent) и скриншот в личные сообщения для подтверждения.\n"
-            "<i>Это обязательное условие работы в системе.</i>",
+            "<b>Инструкция:</b>\n"
+            "При назначении клиента отправьте его юзернейм @SmirAgent и скриншот в ЛС.\n"
+            "——————————\n"
+            "<b>Команда для статистики:</b>\n"
+            "/stats — ваша статистика (клиенты, заказы, профит)",
             reply_markup=main_kb
         )
         return
@@ -305,6 +314,35 @@ async def start(message: types.Message):
         "<i>Ваш запрос обрабатывается. Ожидайте подтверждения.</i>"
     )
 
+@dp.message(Command('stats'))
+async def show_stats(message: types.Message):
+    user_id = message.from_user.id
+    
+    if user_id not in SELLER_IDS:
+        await message.answer("<i>У вас нет прав для этой команды.</i>")
+        return
+    
+    stats = seller_stats.get(user_id, {'clients': [], 'orders': [], 'total': 0})
+    
+    clients_count = len(stats['clients'])
+    orders_count = len(stats['orders'])
+    total_sum = stats['total']
+    
+    seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар"
+    
+    text = (
+        f"<b>Статистика продавца {seller_name}:</b>\n"
+        f"——————————\n"
+        f"Назначено клиентов: <b>{clients_count}</b>\n"
+        f"Заказов выполнено: <b>{orders_count}</b>\n"
+        f"Общий профит: <b>{total_sum:,} руб.</b>\n"
+        f"——————————\n"
+        f"<i>Ваша доля (70%): {int(total_sum * 0.7):,} руб.</i>\n"
+        f"<i>Доля создателя (30%): {int(total_sum * 0.3):,} руб.</i>"
+    )
+    
+    await message.answer(text)
+
 @dp.callback_query(lambda cb: cb.data.startswith('assign_'))
 async def assign_seller(callback: types.CallbackQuery):
     parts = callback.data.split('_')
@@ -316,6 +354,12 @@ async def assign_seller(callback: types.CallbackQuery):
         return
     
     user_seller[user_id] = seller_id
+    
+    # Добавляем клиента в статистику продавца
+    if seller_id not in seller_stats:
+        seller_stats[seller_id] = {'clients': [], 'orders': [], 'total': 0}
+    if user_id not in seller_stats[seller_id]['clients']:
+        seller_stats[seller_id]['clients'].append(user_id)
     
     seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар"
     await bot.send_message(
@@ -338,10 +382,7 @@ async def assign_seller(callback: types.CallbackQuery):
         f"ID: {user_id}\n"
         f"Юзернейм: {username}\n"
         "——————————\n"
-        "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.\n"
-        "——————————\n"
-        "<b>Инструкция:</b>\n"
-        "Отправьте юзернейм клиента @SmirAgent и скриншот в ЛС для подтверждения."
+        "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение."
     )
     
     await callback.message.edit_text(
@@ -487,10 +528,7 @@ async def handle_user_message(message: types.Message):
             seller_id,
             f"<b>Сообщение от покупателя</b> (ID: {user_id}):\n{text}\n"
             "——————————\n"
-            "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.\n"
-            "——————————\n"
-            "<b>Инструкция:</b>\n"
-            "Отправьте юзернейм клиента @SmirAgent и скриншот в ЛС для подтверждения.",
+            "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.",
             reply_markup=reply_kb
         )
         await message.answer("<b>Сообщение отправлено продавцу.</b> Ожидайте ответа.")
@@ -531,20 +569,30 @@ async def handle_user_message(message: types.Message):
                 order_lines.append(f"{label}: {form_data.get(field, '—')}")
             
             username = f"@{message.from_user.username}" if message.from_user.username else "Нет юзернейма"
+            
+            # Вычисляем сумму заказа
+            order_total = 0
+            for key, data in form_data['cart'].items():
+                order_total += data['price'] * data['qty']
+            
             order_text = (
                 f"<b>Новый заказ ({category}):</b>\n"
                 f"——————————\n"
                 + "\n".join(order_lines) +
                 f"\n——————————\n"
                 f"Покупатель: {user_id} ({username})\n"
+                f"Сумма заказа: <b>{order_total:,} руб.</b>\n"
                 "——————————\n"
-                "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение.\n"
-                "——————————\n"
-                "<b>Инструкция:</b>\n"
-                "Отправьте юзернейм клиента @SmirAgent и скриншот в ЛС для подтверждения."
+                "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение."
             )
             
             seller_id = user_seller[user_id]
+            
+            # Обновляем статистику продавца
+            if seller_id in seller_stats:
+                seller_stats[seller_id]['orders'].append(f"{category} — {items_text} ({order_total:,} руб.)")
+                seller_stats[seller_id]['total'] += order_total
+            
             try:
                 await bot.send_message(seller_id, order_text)
                 await message.answer(
@@ -553,7 +601,7 @@ async def handle_user_message(message: types.Message):
                 )
                 if user_id not in user_orders:
                     user_orders[user_id] = []
-                user_orders[user_id].append(f"{category} — {form_data['items']}")
+                user_orders[user_id].append(f"{category} — {form_data['items']} ({order_total:,} руб.)")
                 user_carts[user_id] = {}
                 del user_forms[user_id]
             except:
