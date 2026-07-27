@@ -15,8 +15,7 @@ API_TOKEN = '8778491120:AAH8i-eqCEu8sD_N3CodImVe2LJxneNvrrs'
 # ========== ПРОДАВЦЫ ==========
 SELLER_SMIR = 8187401606
 SELLER_SAKHAR = 8486571400
-SELLER_MIGRANT = 6709253759   # Мигрант (твинок для теста)
-SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR, SELLER_MIGRANT]
+SELLER_IDS = [SELLER_SMIR, SELLER_SAKHAR]
 
 # ========== ПОДКЛЮЧЕНИЕ К SUPABASE ==========
 SUPABASE_URL = 'https://onngeuzbcjtfswmyukog.supabase.co'
@@ -363,6 +362,7 @@ async def start(message: types.Message):
     
     save_user(user_id, message.from_user.username)
     
+    # Если пользователь — продавец
     if user_id in SELLER_IDS:
         await message.answer(
             "<b>Панель управления.</b>\n"
@@ -393,10 +393,12 @@ async def start(message: types.Message):
         )
         return
     
+    # ===== ПРОВЕРКА: ЕСТЬ ЛИ КЛИЕНТ УЖЕ В СИСТЕМЕ =====
     existing_seller = get_seller_for_user(user_id)
     
     if existing_seller is not None:
-        seller_name = "Smir" if existing_seller == SELLER_SMIR else "Сахар" if existing_seller == SELLER_SAKHAR else "Мигрант"
+        # Клиент уже назначен продавцу → просто приветствуем
+        seller_name = "Smir" if existing_seller == SELLER_SMIR else "Сахар"
         await message.answer(
             f"<b>Добро пожаловать.</b>\n"
             f"<i>Ваш продавец — {seller_name}.</i>\n"
@@ -405,14 +407,14 @@ async def start(message: types.Message):
         )
         return
     
+    # ===== НОВЫЙ КЛИЕНТ: ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ АДМИНАМ =====
     username = f"@{message.from_user.username}" if message.from_user.username else "Нет юзернейма"
     
     for admin_id in SELLER_IDS:
         try:
             assign_kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Назначить Smir", callback_data=f"assign_{user_id}_{SELLER_SMIR}")],
-                [InlineKeyboardButton(text="Назначить Сахар", callback_data=f"assign_{user_id}_{SELLER_SAKHAR}")],
-                [InlineKeyboardButton(text="Назначить Мигрант", callback_data=f"assign_{user_id}_{SELLER_MIGRANT}")]
+                [InlineKeyboardButton(text="Назначить Сахар", callback_data=f"assign_{user_id}_{SELLER_SAKHAR}")]
             ])
             await bot.send_message(
                 admin_id,
@@ -446,7 +448,7 @@ async def show_stats(message: types.Message):
     worker_percent = get_worker_percentage(total_sum)
     creator_percent = 100 - worker_percent
     
-    seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар" if user_id == SELLER_SAKHAR else "Мигрант"
+    seller_name = "Smir" if user_id == SELLER_SMIR else "Сахар"
     
     next_levels = [
         (80000, 75, "80 000"),
@@ -491,7 +493,7 @@ async def assign_seller(callback: types.CallbackQuery):
     
     assign_user_to_seller(user_id, seller_id)
     
-    seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар" if seller_id == SELLER_SAKHAR else "Мигрант"
+    seller_name = "Smir" if seller_id == SELLER_SMIR else "Сахар"
     await bot.send_message(
         user_id,
         f"<b>Добро пожаловать.</b>\n"
@@ -773,10 +775,8 @@ async def handle_order_decision(callback: types.CallbackQuery):
         
         if seller_id == SELLER_SMIR:
             contact = "@SmirAgent"
-        elif seller_id == SELLER_SAKHAR:
-            contact = "@nosugarzero"
         else:
-            contact = "@migranti_RUS"
+            contact = "@nosugarzero"
         
         await bot.send_message(
             client_id,
