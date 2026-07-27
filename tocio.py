@@ -102,16 +102,27 @@ def assign_user_to_seller(user_id: int, seller_id: int):
 
 def save_order(client_id: int, seller_id: int, items: str, category: str, total: int):
     try:
-        supabase.table('orders').insert({
+        result = supabase.table('orders').insert({
             'client_id': client_id,
             'seller_id': seller_id,
             'items': items,
             'category': category,
-            'total': total
+            'total': total,
+            'status': 'pending'
         }).execute()
-        supabase.rpc('increment_orders', {'seller_id': seller_id, 'profit': total}).execute()
+        # Возвращаем ID созданного заказа
+        if result.data and len(result.data) > 0:
+            return result.data[0]['id']
+        return None
     except Exception as e:
         logging.error(f"Ошибка сохранения заказа: {e}")
+        return None
+
+def update_order_status(order_id: int, status: str):
+    try:
+        supabase.table('orders').update({'status': status}).eq('id', order_id).execute()
+    except Exception as e:
+        logging.error(f"Ошибка обновления статуса заказа: {e}")
 
 def get_seller_stats(seller_id: int):
     try:
@@ -534,8 +545,14 @@ async def my_orders(message: types.Message):
     
     text = "<b>Ваши заказы:</b>\n"
     text += "——————————\n"
+    status_map = {
+        'pending': '⏳ На рассмотрении',
+        'approved': '✅ Подтверждён',
+        'rejected': '❌ Отклонён'
+    }
     for i, order in enumerate(orders, 1):
-        text += f"{i}. {order['items']} — {order['total']:,} руб. ({order['status']})\n"
+        status_text = status_map.get(order['status'], order['status'])
+        text += f"{i}. {order['items']} — {order['total']:,} руб. ({status_text})\n"
     text += "——————————"
     
     await message.answer(text)
@@ -639,18 +656,27 @@ async def handle_user_message(message: types.Message):
                 "<b>Правило:</b> 30% — создателю, 70% — вам. Отказ = отключение."
             )
             
-            save_order(user_id, seller, items_text, category, order_total)
+            # Сохраняем заказ и получаем его ID
+            order_id = save_order(user_id, seller, items_text, category, order_total)
             
-            try:
-                await bot.send_message(seller, order_text)
-                await message.answer(
-                    "<b>Заказ успешно отправлен.</b>\n"
-                    "Ожидайте подтверждения."
-                )
-                user_carts[user_id] = {}
-                del user_forms[user_id]
-            except:
-                await message.answer("<i>Ошибка отправки заказа. Попробуйте позже.</i>")
+            if order_id:
+                # Добавляем кнопки подтверждения/отказа
+                confirm_kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"approve_{order_id}_{user_id}")],
+                    [InlineKeyboardButton(text="❌ Отказать", callback_data=f"reject_{order_id}_{user_id}")]
+                ])
+                try:
+                    await bot.send_message(seller, order_text, reply_markup=confirm_kb)
+                    await message.answer(
+                        "<b>Заказ успешно отправлен.</b>\n"
+                        "Ожидайте подтверждения."
+                    )
+                    user_carts[user_id] = {}
+                    del user_forms[user_id]
+                except:
+                    await message.answer("<i>Ошибка отправки заказа. Попробуйте позже.</i>")
+            else:
+                await message.answer("<i>Ошибка сохранения заказа. Попробуйте позже.</i>")
             return
         
         next_prompt = prompts[form_data['step'] - 1]
@@ -660,6 +686,59 @@ async def handle_user_message(message: types.Message):
     await message.answer(
         "<i>Используйте кнопки меню для навигации.</i>"
     )
+
+# ========== ОБРАБОТКА ПОДТВЕРЖДЕНИЯ/ОТКАЗА ==========
+@dp.callback_query(lambda cb: cb.data.startswith('approve_') or cb.data.startswith('reject_'))
+async def handle_order_decision(callback: types.CallbackQuery):
+    action, order_id, client_id = callback.data.split('_')
+    order_id = int(order_id)
+    client_id = int(client_id)
+    seller_id = callback.from_user.id
+    
+    if seller_id not in SELLER_IDS:
+        await callback.answer("У вас нет прав.", show_alert=True)
+        return
+    
+    # Получаем продавца клиента
+    client_seller = get_seller_for_user(client_id)
+    if client_seller != seller_id:
+        await callback.answer("Это не ваш клиент.", show_alert=True)
+        return
+    
+    if action == 'approve':
+        # Подтверждаем заказ
+        update_order_status(order_id, 'approved')
+        
+        # Определяем контакт продавца
+        if seller_id == SELLER_SMIR:
+            contact = "@SmirAgent"
+        else:
+            contact = "@nosugarzero"
+        
+        await bot.send_message(
+            client_id,
+            f"<b>✅ Продавец подтвердил вашу анкету!</b>\n"
+            f"Свяжитесь с ним для дальнейших инструкций:\n"
+            f"{contact}"
+        )
+        await callback.message.edit_text(
+            callback.message.text + "\n\n✅ Заказ подтверждён."
+        )
+        await callback.answer("Заказ подтверждён.")
+        
+    elif action == 'reject':
+        # Отказываем заказ
+        update_order_status(order_id, 'rejected')
+        
+        await bot.send_message(
+            client_id,
+            "<b>❌ Ваша анкета отклонена.</b>\n"
+            "Вы можете оформить новый заказ через магазин."
+        )
+        await callback.message.edit_text(
+            callback.message.text + "\n\n❌ Заказ отклонён."
+        )
+        await callback.answer("Заказ отклонён.")
 
 @dp.callback_query(lambda cb: cb.data.startswith('reply_'))
 async def reply_to_buyer(callback: types.CallbackQuery):
@@ -686,7 +765,7 @@ async def exit_chat(message: types.Message):
     else:
         await message.answer("<i>Вы не находитесь в чате.</i>")
 
-# ========== ОСТАЛЬНЫЕ КОЛБЭКИ ==========
+# ========== ОСТАЛЬНЫЕ КОЛБЭКИ (без изменений) ==========
 @dp.callback_query(lambda cb: cb.data.startswith('cat_'))
 async def show_category(callback: types.CallbackQuery):
     user_id = callback.from_user.id
