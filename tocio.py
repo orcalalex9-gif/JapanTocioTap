@@ -100,6 +100,7 @@ main_kb = ReplyKeyboardMarkup(
 )
 
 weapons = {
+    # ===== ОРУЖИЕ =====
     'barret_m82': {'name': 'Barret M82', 'price': 3500000, 'stock': 1, 'category': 'Оружие'},
     'm4a1': {'name': 'M4A1', 'price': 1500000, 'stock': 12, 'category': 'Оружие'},
     'svd': {'name': 'CВД', 'price': 1500000, 'stock': 3, 'category': 'Оружие'},
@@ -116,23 +117,45 @@ weapons = {
     'obrez': {'name': 'Обpeз', 'price': 80000, 'stock': 25, 'category': 'Оружие'},
     'silencer': {'name': 'Глyшитeль 9x19', 'price': 80000, 'stock': 30, 'category': 'Оружие'},
     'grenade': {'name': 'Гpaнaтa Ф-1', 'price': 12500, 'stock': 120, 'category': 'Оружие'},
+
+    # ===== ДОКУМЕНТЫ =====
     'digital_scan': {'name': 'Цифровой скан', 'price': 1500, 'stock': None, 'category': 'Документы'},
     'personal_data': {'name': 'Данные личности', 'price': 7000, 'stock': None, 'category': 'Документы'},
     'drivers_license': {'name': 'Права (пластик)', 'price': 52800, 'stock': None, 'category': 'Документы'},
     'passport_rf': {'name': 'Паспорт РФ', 'price': 178000, 'stock': None, 'category': 'Документы'},
     'foreign_passport_no_chip': {'name': 'Зарубежка (без чипа)', 'price': 350000, 'stock': None, 'category': 'Документы'},
     'foreign_passport_chip': {'name': 'Зарубежка (с чипом)', 'price': 950000, 'stock': None, 'category': 'Документы'},
+
+    # ===== ХИМИЯ =====
     'marijuana': {'name': 'Марихуана', 'price': 2000, 'stock': None, 'category': 'Химия'},
     'hashish': {'name': 'Гашиш', 'price': 3000, 'stock': None, 'category': 'Химия'},
     'methamphetamine': {'name': 'Метамфетамин', 'price': 5000, 'stock': None, 'category': 'Химия'},
     'cocaine': {'name': 'Кокаин', 'price': 10000, 'stock': None, 'category': 'Химия'},
+
+    # ===== АВТО-УГОН =====
     'simple_signs': {'name': 'Простые знаки', 'price': 10000, 'stock': None, 'category': 'Авто-угон'},
     'elite_duplicates': {'name': 'Элитные дубликаты', 'price': 15000, 'stock': None, 'category': 'Авто-угон'},
     'lockpick_kit': {'name': 'Комплект отмычек и сканер', 'price': 35000, 'stock': 15, 'category': 'Авто-угон'},
     'anti_tracker': {'name': 'Программа-антитрекер', 'price': 70000, 'stock': 8, 'category': 'Авто-угон'},
+
+    # ===== СВЯЗЬ И СПЕЦСРЕДСТВА =====
     'burner_phone': {'name': 'Одноразовый телефон (Burner Phone)', 'price': 10000, 'stock': 25, 'category': 'Связь'},
     'jammer': {'name': 'Портативная глушилка сигнала', 'price': 120000, 'stock': 5, 'category': 'Связь'},
+
+    # ===== УСЛУГИ =====
     'sportiki': {'name': 'Спортики (Силовой выезд)', 'price': 150000, 'stock': None, 'category': 'Услуги'},
+
+    # ===== РАСТЕНИЯ (НОВАЯ КАТЕГОРИЯ) =====
+    'seeds_weed': {'name': 'Семена марихуаны (10 шт.)', 'price': 5000, 'stock': None, 'category': 'Растения'},
+    'seeds_coca': {'name': 'Семена коки (10 шт.)', 'price': 15000, 'stock': None, 'category': 'Растения'},
+    'soil': {'name': 'Грунт для выращивания (мешок)', 'price': 3000, 'stock': None, 'category': 'Растения'},
+    'fertilizer': {'name': 'Удобрения (комплект)', 'price': 8000, 'stock': None, 'category': 'Растения'},
+    'lamp': {'name': 'Лампа для рассады (LED)', 'price': 12000, 'stock': None, 'category': 'Растения'},
+    'drip_system': {'name': 'Система полива (капельная)', 'price': 18000, 'stock': None, 'category': 'Растения'},
+    'ventilation': {'name': 'Вентиляция (комплект)', 'price': 25000, 'stock': None, 'category': 'Растения'},
+    'carbon_filter': {'name': 'Фильтр для воздуха (угольный)', 'price': 15000, 'stock': None, 'category': 'Растения'},
+    'hydroponics': {'name': 'Гидропонная установка', 'price': 35000, 'stock': None, 'category': 'Растения'},
+    'dryer': {'name': 'Сушилка для шишек', 'price': 20000, 'stock': None, 'category': 'Растения'},
 }
 
 user_sessions = {}
@@ -237,6 +260,7 @@ def get_shop_kb():
         [InlineKeyboardButton(text="Авто-угон", callback_data="cat_Авто-угон")],
         [InlineKeyboardButton(text="Связь", callback_data="cat_Связь")],
         [InlineKeyboardButton(text="Услуги", callback_data="cat_Услуги")],
+        [InlineKeyboardButton(text="Растения", callback_data="cat_Растения")],
         [InlineKeyboardButton(text="Назад", callback_data="back_main")]
     ])
     return kb
@@ -399,6 +423,22 @@ def get_form_template(category: str, items_text: str) -> tuple:
                 "<b>Укажите ФИО цели:</b>",
                 "<b>Укажите адрес цели:</b>",
                 "<b>Опишите задачу подробно:</b>",
+                "<b>Укажите способ оплаты:</b>\n<i>Крипта / Перевод на карту</i>"
+            ]
+        },
+        'Растения': {
+            'text': (
+                "<b>АНКЕТА ДЛЯ ОФОРМЛЕНИЯ ЗАКАЗА (Растения)</b>\n"
+                "——————————\n"
+                f"Товар и количество: {items_text}\n"
+                "——————————\n"
+                "<i>Заполните и отправьте ответным сообщением:</i>\n\n"
+                "<b>Укажите регион / район:</b>"
+            ),
+            'fields': ['region', 'hideout', 'time', 'payment'],
+            'prompts': [
+                "<b>Укажите тип тайника:</b>\n<i>Магнит / Тайник в лесу / Прикоп</i>",
+                "<b>Укажите удобное время для забора:</b>\n<i>День / Ночь / Не имеет значения</i>",
                 "<b>Укажите способ оплаты:</b>\n<i>Крипта / Перевод на карту</i>"
             ]
         }
@@ -566,7 +606,18 @@ async def assortiment(message: types.Message):
         "• Одноразовый телефон (Burner Phone) — 10 000 руб. (Остаток: 25)\n"
         "• Портативная глушилка сигнала — 120 000 руб. (Остаток: 5)\n\n"
         "<b>УСЛУГИ:</b>\n"
-        "• Спортики (Силовой выезд) — от 150 000 руб. (за задачу)\n"
+        "• Спортики (Силовой выезд) — от 150 000 руб. (за задачу)\n\n"
+        "<b>РАСТЕНИЯ (всё для выращивания):</b>\n"
+        "• Семена марихуаны (10 шт.) — 5 000 руб.\n"
+        "• Семена коки (10 шт.) — 15 000 руб.\n"
+        "• Грунт для выращивания (мешок) — 3 000 руб.\n"
+        "• Удобрения (комплект) — 8 000 руб.\n"
+        "• Лампа для рассады (LED) — 12 000 руб.\n"
+        "• Система полива (капельная) — 18 000 руб.\n"
+        "• Вентиляция (комплект) — 25 000 руб.\n"
+        "• Фильтр для воздуха (угольный) — 15 000 руб.\n"
+        "• Гидропонная установка — 35 000 руб.\n"
+        "• Сушилка для шишек — 20 000 руб.\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "<b>Для связи и оформления заказов:</b> @SmirAgent"
     )
@@ -632,9 +683,13 @@ async def short(message: types.Message):
         "• Гашиш — 3 000 руб./г\n"
         "• Метамфетамин — 5 000 руб./г\n"
         "• Кокаин — 10 000 руб./г\n\n"
-        "<b>ПЛАСТИНЫ:</b>\n"
+        "<b>АВТО-УГОН:</b>\n"
         "• Простые знаки — 10 000 руб.\n"
-        "• Элитные дубликаты — 15 000 руб."
+        "• Элитные дубликаты — 15 000 руб.\n\n"
+        "<b>РАСТЕНИЯ (кратко):</b>\n"
+        "• Семена марихуаны (10 шт.) — 5 000 руб.\n"
+        "• Семена коки (10 шт.) — 15 000 руб.\n"
+        "• Грунт, удобрения, лампы и оборудование — по запросу."
     )
     await message.answer(text)
 
