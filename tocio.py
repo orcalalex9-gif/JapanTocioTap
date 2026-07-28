@@ -495,18 +495,27 @@ async def start(message: types.Message):
     username = f"@{message.from_user.username}" if message.from_user.username else "Нет юзернейма"
     for admin_id in SELLER_IDS:
         try:
-            assign_kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="Назначить Smir", callback_data=f"assign_{user_id}_{SELLER_SMIR}")],
-                [InlineKeyboardButton(text="Назначить Сахар", callback_data=f"assign_{user_id}_{SELLER_SAKHAR}")]
-            ])
-            await bot.send_message(
-                admin_id,
-                f"<b>Новый клиент!</b>\n"
-                f"ID: {user_id}\n"
-                f"Юзернейм: {username}\n"
-                f"Нажмите кнопку, чтобы назначить продавца:",
-                reply_markup=assign_kb
-            )
+            if admin_id == SELLER_SMIR:
+                assign_kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="Назначить Smir", callback_data=f"assign_{user_id}_{SELLER_SMIR}")],
+                    [InlineKeyboardButton(text="Назначить Сахар", callback_data=f"assign_{user_id}_{SELLER_SAKHAR}")]
+                ])
+                await bot.send_message(
+                    admin_id,
+                    f"<b>Новый клиент!</b>\n"
+                    f"ID: {user_id}\n"
+                    f"Юзернейм: {username}\n"
+                    f"Нажмите кнопку, чтобы назначить продавца:",
+                    reply_markup=assign_kb
+                )
+            else:
+                await bot.send_message(
+                    admin_id,
+                    f"<b>Новый клиент!</b>\n"
+                    f"ID: {user_id}\n"
+                    f"Юзернейм: {username}\n"
+                    f"Ожидайте назначения от администратора."
+                )
         except Exception as e:
             logging.error(f"Ошибка отправки уведомления продавцу {admin_id}: {e}")
     await message.answer(
