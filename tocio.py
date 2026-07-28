@@ -36,7 +36,7 @@ dp = Dispatcher()
 def is_working_hours() -> bool:
     tz = pytz.timezone('Europe/Moscow')
     now = datetime.now(tz)
-    return 8 <= now.hour < 22
+    return 8 <= now.hour < 23
 
 # ========== ПРОВЕРКА РЕГИОНА ==========
 def validate_region(region: str) -> bool:
@@ -1381,7 +1381,7 @@ async def back_main(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if user_id not in SELLER_IDS and not is_working_hours():
         await callback.message.answer(
-            "<b>Бот работает только с 08:00 до 22:00 (МСК).</b>\n"
+            "<b>Бот работает только с 08:00 до 23:00 (МСК).</b>\n"
             "<i>Напишите позже.</i>"
         )
         await callback.answer()
